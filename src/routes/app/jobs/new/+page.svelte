@@ -26,9 +26,22 @@
     </p>
     <label>Title<input name="title" required maxlength="120" /></label><label
       >Lab-visible listing summary<textarea name="listing_summary" required maxlength="1000"></textarea></label
-    ><label>Exact current task<textarea name="current_task" required rows="8"></textarea></label><label
-      >Definition of done<textarea name="success_criteria" required></textarea></label
-    ><label>Desired output format<textarea name="output_format" required></textarea></label>
+    ><label>Exact current task<textarea name="current_task" required rows="8" maxlength="100000"></textarea></label
+    ><label>Definition of done<textarea name="success_criteria" required maxlength="25000"></textarea></label><label
+      >Desired output format<textarea name="output_format" required maxlength="10000"></textarea></label
+    ><label
+      >Prior context<textarea
+        name="prior_context"
+        rows="8"
+        maxlength="250000"
+        placeholder="Relevant prior work or model output"></textarea></label
+    ><label
+      >Institutional or shared links<textarea
+        name="external_urls"
+        rows="3"
+        maxlength="20480"
+        placeholder="One HTTPS URL per line"></textarea></label
+    >
   </fieldset>
   <fieldset>
     <legend>Execution</legend><label
@@ -37,6 +50,12 @@
           >{/each}</select
       ></label
     >
+    <fieldset class="nested">
+      <legend>Other acceptable models</legend>
+      {#each data.models as m}<label
+          ><input type="checkbox" name="acceptable_model_ids" value={m.id} />{m.display_name}</label
+        >{/each}
+    </fieldset>
     <div class="checks">
       <span>Required tools</span>{#each tools as tool}<label
           ><input type="checkbox" name="required_tools" value={tool} />{tool}</label
@@ -48,6 +67,15 @@
         ><option value="heavy">Heavy, over 20 minutes</option></select
       ></label
     ><label
+      >Deadline (optional)<input
+        type="text"
+        name="deadline"
+        placeholder="2026-09-30T17:00:00-04:00"
+        aria-describedby="deadline-help"
+      /></label
+    >
+    <p id="deadline-help">Use an ISO 8601 timestamp with an explicit UTC offset; no timezone is assumed.</p>
+    <label
       >Visibility<select name="visibility"
         ><option value="claimed_only">Sealed until claimed</option><option value="lab">Lab-visible</option></select
       ></label
@@ -60,7 +88,7 @@
           value="collaborator">Collaborator</option
         ><option value="other">Other</option></select
       ></label
-    ><label>Sensitivity notes<textarea name="sensitivity_notes"></textarea></label>
+    ><label>Sensitivity notes<textarea name="sensitivity_notes" maxlength="10000"></textarea></label>
     <p class="danger">
       Never include passwords, keys, tokens, PHI, restricted human-subject data, export-controlled data,
       personnel/student records, or unauthorized collaborator material.
@@ -72,7 +100,7 @@
   </fieldset>
   <section class="actions">
     <button name="intent" value="draft" class="secondary">Save draft</button><button name="intent" value="publish"
-      >Publish job</button
+      >Create and publish now</button
     >
   </section>
 </form>

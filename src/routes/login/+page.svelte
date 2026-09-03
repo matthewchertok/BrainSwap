@@ -1,6 +1,6 @@
 <script lang="ts">
   import { brand } from '$lib/config';
-  let { form } = $props();
+  let { data, form } = $props();
 </script>
 
 <main class="center">
@@ -14,6 +14,7 @@
       <li>Review the returned result.</li>
     </ol>
     <form method="POST"><button>Sign in with Google</button></form>
+    {#if data.message}<p class="error" role="alert">{data.message}</p>{/if}
     {#if form?.message}<p class="error" role="alert">{form.message}</p>{/if}
     <p class="notice">
       <strong>Data boundary:</strong> Do not submit credentials, PHI, restricted human-subject data, or other Restricted /

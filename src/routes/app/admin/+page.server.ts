@@ -1,37 +1,56 @@
-import { error, fail } from '@sveltejs/kit';
+import { error, fail, redirect } from '@sveltejs/kit';
+import { requireSelectedMembership } from '$lib/server/membership';
+import { adminInviteSchema, adminMembershipSchema } from '$lib/validation';
 import type { Actions } from './$types';
-export const load = async ({ locals, parent }) => {
+export const load = async ({ locals, parent, url }) => {
   const { membership } = await parent();
-  if (membership.role !== 'admin') error(404);
-  const [{ data: members }, { data: models }, { data: audit }] = await Promise.all([
+  if (membership?.role !== 'admin') error(404);
+  const [{ data: members, error: membersError }, { data: models, error: modelsError }] = await Promise.all([
     locals.supabase.rpc('admin_memberships', { p_organization_id: membership.organization_id }),
     locals.supabase
       .from('models')
       .select('id,display_name,provider,active')
-      .eq('organization_id', membership.organization_id),
-    locals.supabase
-      .from('audit_events')
-      .select('event_type,created_at,metadata')
       .eq('organization_id', membership.organization_id)
-      .order('created_at', { ascending: false })
-      .limit(50)
   ]);
-  return { members: members ?? [], models: models ?? [], audit: audit ?? [] };
+  if (membersError || modelsError) error(503, 'Administration data is temporarily unavailable.');
+  return {
+    members: members ?? [],
+    models: models ?? [],
+    notice: url.searchParams.has('saved') ? 'Membership saved.' : null
+  };
 };
 export const actions: Actions = {
-  invite: async ({ request, locals }) => {
-    const { data: memberships } = await locals.supabase.rpc('my_active_memberships');
-    const membership = memberships?.find((m: { role: string }) => m.role === 'admin');
-    if (!membership) return fail(403, { message: 'Administrator access required.' });
+  invite: async ({ request, locals, cookies, url }) => {
+    const membership = await requireSelectedMembership(locals, cookies, url);
+    if (membership.role !== 'admin') return fail(403, { message: 'Administrator access required.' });
     const f = await request.formData();
-    const email = String(f.get('email') ?? '')
-      .trim()
-      .toLowerCase();
-    const { error } = await locals.supabase.rpc('admin_upsert_membership', {
+    const parsed = adminInviteSchema.safeParse({ email: f.get('email'), role: f.get('role') });
+    if (!parsed.success) return fail(400, { message: 'Enter a valid exact email and role.' });
+    const { error: invitationError } = await locals.supabase.rpc('admin_upsert_membership', {
       p_organization_id: membership.organization_id,
-      p_email: email,
-      p_role: f.get('role')
+      p_email: parsed.data.email,
+      p_role: parsed.data.role
     });
-    return error ? fail(400, { message: error.message }) : { message: 'Invitation saved.' };
+    if (invitationError) return fail(400, { message: 'The invitation could not be saved.' });
+    redirect(303, '/app/admin?saved=invite');
+  },
+  membership: async ({ request, locals, cookies, url }) => {
+    const membership = await requireSelectedMembership(locals, cookies, url);
+    if (membership.role !== 'admin') return fail(403, { message: 'Administrator access required.' });
+    const f = await request.formData();
+    const parsed = adminMembershipSchema.safeParse({
+      membership_id: f.get('membership_id'),
+      role: f.get('role'),
+      active: f.get('active') === 'yes'
+    });
+    if (!parsed.success) return fail(400, { message: 'Review the membership values.' });
+    const { error: updateError } = await locals.supabase.rpc('admin_update_membership', {
+      p_organization_id: membership.organization_id,
+      p_membership_id: parsed.data.membership_id,
+      p_role: parsed.data.role,
+      p_active: parsed.data.active
+    });
+    if (updateError) return fail(400, { message: 'The membership could not be updated.' });
+    redirect(303, '/app/admin?saved=membership');
   }
 };

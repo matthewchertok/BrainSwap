@@ -1,64 +1,218 @@
 # Manual setup runbook
 
-## 1. Local prerequisites
+This is the operator runbook for local verification and a later synthetic-data hosted deployment. No cloud resources were created or modified during the repository audit. The current recommendation is `BLOCK PILOT`; completing these steps records evidence but does not itself authorize real research data.
 
-Install Node.js 20+ (current active LTS is recommended), npm, and a Docker-compatible runtime. The project installs the Supabase CLI as a development dependency. Run:
+## 1. Confirm the gate and prerequisites
+
+Use an isolated Supabase project and Cloudflare Pages project for the pilot. Do not reuse a production or research-data database. Before proceeding, name an operator and incident contact and decide who owns Google, Supabase, Cloudflare, backups, retention, the optional webhook, and AI-provider approval.
+
+Install:
+
+- Git;
+- Node.js 24.15 or later, but still in the Node 24 release line;
+- npm;
+- Docker or another Supabase-CLI-compatible container runtime; and
+- a browser for the manual acceptance test; and
+- optionally, `nvm` or another Node version manager.
+
+Verify the runtime:
+
+If `nvm` is installed, select the checked-in version first. Otherwise select a compatible Node 24 release with your version manager.
 
 ```sh
-npm ci
-cp .env.example .env
-npm run db:start
-npm run db:reset
-npm run test:db
-npm run dev
+nvm use # omit when using a different version manager
+node --version
+npm --version
 ```
 
-Copy the local URL and anon/publishable key printed by `npx supabase status` into `.env`. Run `npm run db:stop` when finished. Use `npm run db:types` after schema changes.
+`node --version` must satisfy `>=24.15.0 <25`.
 
-## 2. Hosted Supabase
+## 2. Install reproducibly and run application checks
 
-1. Create a project and securely record its reference, project URL, publishable key, database password, and recovery details.
-2. Authenticate/link/push from this directory:
-   ```sh
-   npx supabase login
-   npx supabase link --project-ref YOUR_PROJECT_REF
-   npx supabase db push
-   npx supabase seed buckets --linked
-   npx supabase gen types typescript --linked > src/lib/types/database.generated.ts
-   ```
-3. Copy `supabase/bootstrap-admin.sql`, replace organization name, normalized slug, exact initial-admin email, and display name placeholders, review it, and execute it in the Supabase SQL editor. Never commit the adapted file.
-4. In Table Editor/SQL, confirm every public application table reports RLS enabled and `job-files` is private with the configured size/MIME restrictions. Confirm authenticated clients lack direct workflow-table update/delete grants.
+From the repository root:
 
-## 3. Google OAuth
+```sh
+cp .env.example .env
+npm ci
+npm run format:check
+npm run check
+npm run lint
+npm test
+npm run security:check
+npm run build
+git diff --check
+```
 
-1. Create a Google Cloud project and OAuth consent screen suitable for a small testing deployment. Keep it in testing and add pilot accounts as test users when Google requires it.
-2. Request only OpenID, email, and profile. Create a **Web application** OAuth client.
-3. Add `http://localhost:5173` and the eventual `https://YOUR_PROJECT.pages.dev` as authorized JavaScript origins.
-4. In Supabase Authentication → Providers → Google, copy the displayed Supabase callback URL (normally `https://YOUR_REF.supabase.co/auth/v1/callback`) into Google's authorized redirect URIs.
-5. Put the Google client ID and secret only in Supabase's Google provider settings. Never put the secret in this repository or Cloudflare.
+The copied values are deliberately nonfunctional compile-time placeholders. They let configuration validation, type checking, and the build run before a local Supabase stack exists; they do not permit login or API access. The build must create `.svelte-kit/cloudflare/_worker.js`. Stop on any failure. Do not use `npm audit fix --force`; review dependency advisories and compatible updates deliberately. Keep `.env` untracked and replace the placeholders with the local values in step 3 before starting the app.
 
-## 4. Supabase Auth URLs
+## 3. Start a fresh local Supabase stack
 
-Set the Site URL to the production Pages origin. Add exact redirect allowlist entries for:
+Start Docker, then run:
 
-- `http://localhost:5173/auth/callback`
-- `https://YOUR_PROJECT.pages.dev/auth/callback`
-- the production application `/auth/callback` if distinct.
+```sh
+npm run db:start
+npm run db:reset
+npx supabase seed buckets --local --yes
+npm run db:lint
+npm run test:db
+npm run db:types
+npx supabase status
+```
 
-Application origins belong in Google, while application callback paths belong in Supabase. Add any preview URL only when intentionally used. A later custom domain requires adding its origin/callback to both systems.
+`db:reset` must apply every migration in filename order. `test:db` must run the complete pgTAP suite, not only structural smoke checks. `db:types` writes `src/lib/types/database.generated.ts`; review its diff and rerun `npm run check`.
 
-## 5. Cloudflare Pages
+Copy the local API URL and local anon/publishable key reported by `supabase status` into an untracked `.env`:
 
-1. Connect the private GitHub repository; create Pages with production branch `main`, build command `npm run build`, and output `.svelte-kit/cloudflare`.
-2. Configure `PUBLIC_SUPABASE_URL`, `PUBLIC_SUPABASE_PUBLISHABLE_KEY`, `PUBLIC_APP_NAME`, and `PUBLIC_APP_TAGLINE`; optionally configure server-only `NOTIFICATION_WEBHOOK_URL`. Do not add database/service keys or Google secrets.
-3. Deploy, note the assigned `pages.dev` address, then add it to the Google origins and Supabase URL lists above. No custom domain is required for the pilot.
+```dotenv
+PUBLIC_SUPABASE_URL=http://127.0.0.1:54321
+PUBLIC_SUPABASE_PUBLISHABLE_KEY=LOCAL_KEY_FROM_SUPABASE_STATUS
+PUBLIC_APP_NAME=BrainSwap
+PUBLIC_APP_TAGLINE=Hand off AI jobs when your model cannot finish them.
+```
 
-## 6. Initial users
+Never place a service-role/secret key in `.env` or application configuration.
 
-Sign in with the exact bootstrap-admin address and confirm callback claiming reaches `/app`. In `/app/admin`, add the exact addresses of two pilot users; no email is sent. Add them as Google test users when needed. Each signs in and completes display name, models, capabilities, and notifications on `/app/profile`.
+## 4. Choose DB-only local testing or configure local Google OAuth
 
-## 7. Custom domain later
+The checked-in `supabase/config.toml` does not enable Google. Without the following deliberate setup, local work is database-only and the browser login flow cannot be tested.
 
-Attach (for example) `brainswap.io` to the existing Pages project via Cloudflare Custom domains; no app rebuild or database migration is required beyond redeployment with desired branding. Add `https://brainswap.io` to Google authorized origins, `https://brainswap.io/auth/callback` to Supabase redirects, update Supabase Site URL if canonical, and verify CSP/Supabase settings and OAuth end-to-end before switching links.
+For local OAuth, create a Google **Web application** client for testing. In Google, add this Supabase Auth provider callback as an **Authorized redirect URI**:
 
-Cloud accounts, secrets, DNS, OAuth approval, webhook ownership, data retention/backups, and institutional approval cannot be configured from this repository. Run `docs/acceptance-test.md` with synthetic content before real data.
+```text
+http://127.0.0.1:54321/auth/v1/callback
+```
+
+BrainSwap does not use Google's JavaScript sign-in flow, so do not add application/Pages origins to Google's Authorized JavaScript origins merely for this server-side PKCE flow.
+
+In a temporary, reviewed local change to `supabase/config.toml`, add:
+
+```toml
+[auth.external.google]
+enabled = true
+client_id = "env(SUPABASE_AUTH_EXTERNAL_GOOGLE_CLIENT_ID)"
+secret = "env(SUPABASE_AUTH_EXTERNAL_GOOGLE_CLIENT_SECRET)"
+skip_nonce_check = false
+```
+
+Put the client ID and secret only in the untracked `.env`, restart the local stack, and keep Google consent in testing mode with explicit test users:
+
+```dotenv
+SUPABASE_AUTH_EXTERNAL_GOOGLE_CLIENT_ID=replace-me.apps.googleusercontent.com
+SUPABASE_AUTH_EXTERNAL_GOOGLE_CLIENT_SECRET=replace-me
+```
+
+```sh
+npm run db:stop
+npm run db:start
+npm run db:reset
+```
+
+The application callback `http://localhost:5173/auth/callback` belongs in Supabase Auth's redirect allowlist; it is not the Google provider callback. Never commit the Google secret or an adapted local config containing credentials.
+
+## 5. Bootstrap a local organization and exercise login
+
+The bootstrap template contains four values to replace: organization name, normalized slug, exact initial-admin email, and display name. Make a temporary copy outside the repository, edit it, and refuse to execute it if a placeholder remains:
+
+```sh
+bootstrap_copy=$(mktemp -t brainswap-bootstrap.XXXXXX)
+cp supabase/bootstrap-admin.sql "$bootstrap_copy"
+```
+
+After editing `$bootstrap_copy`, run:
+
+```sh
+if grep -nE 'REPLACE_WITH|replace-with|example\.invalid' "$bootstrap_copy"; then
+  echo 'Bootstrap placeholders remain; do not execute.'
+  exit 1
+fi
+```
+
+Paste the reviewed SQL into the local Supabase Studio SQL editor and execute it once. Run it a second time to verify idempotency. If local OAuth is configured, start `npm run dev`, sign in with the exact invited address, and verify that an uninvited test account is rejected. Use synthetic content only.
+
+## 6. Create and link an isolated hosted Supabase project
+
+This is a manual cloud action; it was not performed by the audit. Create a new Supabase project and securely record its project reference, project URL, publishable key, database recovery information, and owner. Do not copy real data into it.
+
+Authenticate and link this checkout:
+
+```sh
+npx supabase login
+npx supabase link --project-ref YOUR_PROJECT_REF
+npx supabase db push --dry-run
+```
+
+Review the dry run. It must contain only the expected BrainSwap migrations. Do not use `db reset --linked`.
+
+The hardening migration is additive in schema shape, but it deliberately validates stricter invariants. Do not assume it will apply automatically to a populated v0.1 database. First take a recoverable database backup and test the migration against a disposable restored copy. Remediate any legacy HTTP/malformed context URLs, unsupported tool or capability values, inconsistent workflow rows, over-limit or unsafe filenames, and legacy Storage paths before touching the source project. Storage object renames/deletions must use the Storage API, never direct `storage.objects` mutation. For this predeployment repository, a new isolated project from clean migrations is preferred.
+
+## 7. Apply hosted migrations, bucket configuration, types, and bootstrap
+
+After reviewing the dry run:
+
+```sh
+npx supabase db push
+npx supabase seed buckets --linked --yes
+npx supabase gen types typescript --linked > src/lib/types/database.generated.ts
+npm run check
+```
+
+In the Supabase dashboard verify that:
+
+- every intended exposed table has RLS enabled;
+- `job-files` is private;
+- the bucket has the 25 MiB and MIME restrictions from `supabase/config.toml`;
+- `anon` has no application-table or privileged-RPC access;
+- authenticated users lack direct workflow-table mutation grants; and
+- only intended authenticated RPCs are callable.
+
+Create and guard a fresh temporary bootstrap copy as in step 5, then paste it into the hosted SQL editor. The script also aborts if its built-in placeholders remain. Do not commit or retain the adapted file. Confirm that the initial models and invitation belong to the expected organization.
+
+## 8. Configure hosted Google OAuth and Supabase redirects
+
+In Google, keep the consent screen in testing mode and add each pilot account as a test user. Request only OpenID, email, and profile. Create a Web application OAuth client.
+
+In Supabase Authentication settings, keep anonymous sign-ins and manual identity linking disabled. Disable direct email/password, magic-link, phone, and every social provider except Google. Leave new OAuth-user creation enabled so an invited Google identity can create its Auth record on first sign-in; database membership still requires the exact confirmed invitation email. The checked-in local config similarly disables direct email signup while allowing Google OAuth identities.
+
+Add the Supabase provider callback shown in Supabase's Google provider page as Google's **Authorized redirect URI**, normally:
+
+```text
+https://YOUR_PROJECT_REF.supabase.co/auth/v1/callback
+```
+
+Store the Google client ID and secret only in Supabase Authentication -> Providers -> Google. Do not put the secret in GitHub or Cloudflare.
+
+In Supabase Auth URL Configuration:
+
+- set Site URL to the final HTTPS Pages origin; and
+- add exact redirect allowlist entries for `https://YOUR_PAGES_HOST/auth/callback` and any intentional custom-domain callback.
+
+Add `http://localhost:5173/auth/callback` only when local application OAuth is intentionally supported. Preview deployment callbacks should not be wildcarded; add an exact preview URL only for a controlled test, then remove it.
+
+## 9. Create the Cloudflare Pages deployment
+
+This is also a manual cloud action. Connect the private repository in Cloudflare Pages with:
+
+- production branch: `main`;
+- build command: `npm run build`;
+- build output directory: `.svelte-kit/cloudflare`; and
+- Node version: `24.15.0` or another version satisfying `>=24.15.0 <25` (the checked-in `.nvmrc` also declares `24.15.0`).
+
+Set these Pages environment variables for the intended environment:
+
+```text
+NODE_VERSION=24.15.0
+PUBLIC_SUPABASE_URL=https://YOUR_PROJECT_REF.supabase.co
+PUBLIC_SUPABASE_PUBLISHABLE_KEY=YOUR_PUBLISHABLE_KEY
+PUBLIC_APP_NAME=BrainSwap
+PUBLIC_APP_TAGLINE=Hand off AI jobs when your model cannot finish them.
+```
+
+Do not add a Supabase service-role/secret key, database password, or Google secret. Configure `NOTIFICATION_WEBHOOK_URL` only if the reviewed build has a reachable metadata-only webhook path, the endpoint owner is known, and failure behavior has been tested. After Pages assigns a hostname, return to step 8 and make the Supabase Site URL/redirect entry exact.
+
+## 10. Invite pilot users and complete synthetic acceptance
+
+Sign in as the exact bootstrap admin. In `/app/admin`, add exact invitation emails for at least a requester, two competing helpers, and a separate cross-organization test account/organization. No invitation email is sent by BrainSwap. Verify each membership, role, and organization before proceeding.
+
+Run [docs/acceptance-test.md](docs/acceptance-test.md) using dummy tasks and files. Record tester, timestamp, commit, browser, expected/actual result, response headers, and screenshots that contain no sensitive payload. Any authorization, Storage, deletion, OAuth, CSP, or cross-organization failure keeps the recommendation at `BLOCK PILOT`.
+
+Only after all automated and manual gates pass may the lab reassess whether the system is suitable for a limited synthetic or real-data pilot. Real unpublished research remains explicitly blocked under the current audit recommendation.

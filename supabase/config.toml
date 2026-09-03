@@ -7,6 +7,13 @@ major_version = 15
 [auth]
 site_url = "http://localhost:5173"
 additional_redirect_urls = ["http://localhost:5173/auth/callback"]
+enable_signup = true
+enable_anonymous_sign_ins = false
+[auth.email]
+# BrainSwap initiates Google OAuth only. Keep direct email/password or magic-link
+# account creation disabled while still allowing new Google identities locally.
+enable_signup = false
+enable_confirmations = true
 [storage]
 enabled = true
 [storage.buckets.job-files]
