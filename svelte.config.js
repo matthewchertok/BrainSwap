@@ -5,6 +5,7 @@ import { loadEnv } from 'vite';
 const environment = loadEnv(process.env.NODE_ENV ?? 'development', process.cwd(), '');
 const supabaseUrl = process.env.PUBLIC_SUPABASE_URL ?? environment.PUBLIC_SUPABASE_URL;
 const publishableKey = process.env.PUBLIC_SUPABASE_PUBLISHABLE_KEY ?? environment.PUBLIC_SUPABASE_PUBLISHABLE_KEY;
+const googleOAuthOrigin = 'https://accounts.google.com';
 
 if (!supabaseUrl || !publishableKey) {
   throw new Error('PUBLIC_SUPABASE_URL and PUBLIC_SUPABASE_PUBLISHABLE_KEY are required.');
@@ -34,7 +35,10 @@ export default {
         'connect-src': ['self', supabaseOrigin],
         'frame-ancestors': ['none'],
         'base-uri': ['self'],
-        'form-action': ['self'],
+        // Chromium and WebKit can apply form-action to every hop of a form
+        // redirect chain. OAuth starts with a same-origin POST, then redirects
+        // through Supabase Auth to Google's account chooser.
+        'form-action': ['self', supabaseOrigin, googleOAuthOrigin],
         'object-src': ['none']
       }
     }

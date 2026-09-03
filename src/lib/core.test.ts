@@ -1,5 +1,6 @@
 import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
+import svelteConfig from '../../svelte.config.js';
 import { contextMarkdown, followUpSnapshot, runnablePrompt } from './prompt';
 import { parseJobForm } from './server/job-form';
 import { getSelectedMembership, type ActiveMembership } from './server/membership';
@@ -186,5 +187,14 @@ describe('security headers', () => {
     const appTemplate = readFileSync(new URL('../app.html', import.meta.url), 'utf8');
     expect(appTemplate).toContain('<meta name="referrer" content="same-origin" />');
     expect(appTemplate).not.toContain('<meta name="referrer" content="no-referrer" />');
+  });
+
+  it('allows only the required OAuth form redirect origins in CSP', () => {
+    const supabaseOrigin = new URL(process.env.PUBLIC_SUPABASE_URL!).origin;
+    expect(svelteConfig.kit.csp.directives['form-action']).toEqual([
+      'self',
+      supabaseOrigin,
+      'https://accounts.google.com'
+    ]);
   });
 });

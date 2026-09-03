@@ -153,6 +153,7 @@ At desktop width and an iPhone-sized viewport, test login, organization selectio
 For protected/auth responses verify:
 
 - `Content-Security-Policy` permits required SvelteKit/Supabase behavior without console violations and includes frame/object restrictions;
+- `form-action` permits only the application, the configured Supabase origin, and `https://accounts.google.com`, and a Google sign-in click visibly leaves the login page;
 - `X-Content-Type-Options: nosniff`;
 - `Referrer-Policy: same-origin`, a matching document-level referrer policy, and a restrictive `Permissions-Policy`;
 - frame denial; and
