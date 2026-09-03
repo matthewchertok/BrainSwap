@@ -101,7 +101,7 @@
   </div>
 </section>
 
-<form method="POST" class="panel profile-form">
+<form method="POST" action="?/save" class="panel profile-form">
   <label
     >Display name<input name="display_name" value={data.profile.display_name ?? ''} maxlength="120" required /></label
   >

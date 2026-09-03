@@ -505,8 +505,11 @@ describe('UI feedback contracts', () => {
     expect(profile).toContain('action="?/upload_photo" enctype="multipart/form-data"');
     expect(profile).not.toContain('cleanupPhoto(data.photo.id, false)');
     expect(profileServer).toContain('upload_photo: async');
+    expect(profileServer).toContain('save: async');
+    expect(profileServer).not.toContain('default: async');
     expect(profileServer).toContain(".from('profile-photos')");
     expect(profileServer).toContain('.upload(reservation.storage_path, photo');
+    expect(profile).toContain('<form method="POST" action="?/save" class="panel profile-form">');
     expect(profile).toContain('name="bio"');
     expect(profile).toContain('Organization<select disabled');
     expect(profile).not.toContain('name="capabilities"');

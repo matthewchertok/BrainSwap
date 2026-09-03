@@ -93,7 +93,7 @@ export const actions: Actions = {
     }
     redirect(303, '/app/profile?photo=uploaded');
   },
-  default: async ({ request, locals, cookies, url }) => {
+  save: async ({ request, locals, cookies, url }) => {
     const membership = await requireSelectedMembership(locals, cookies, url);
     const f = await request.formData();
     const parsed = profileSchema.safeParse({
