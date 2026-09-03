@@ -6,7 +6,7 @@
     -apple-system,
     sans-serif;
   color: #18221d;
-  background: #f5f6f2;
+  background: #fff;
   line-height: 1.5;
   --accent: #e77500;
   --accent-ink: #824100;
@@ -18,6 +18,7 @@
 }
 body {
   margin: 0;
+  background: #fff;
 }
 .app-root {
   display: contents;
@@ -27,15 +28,20 @@ a {
 }
 button,
 .button {
+  font: inherit;
+  font-weight: 700;
   background: var(--accent);
   color: #18221d;
   border: 0;
   border-radius: 0.45rem;
-  padding: 0.7rem 1rem;
-  font-weight: 700;
+  padding: 0.75rem 1.05rem;
   cursor: pointer;
   text-decoration: none;
-  font: inherit;
+}
+button:disabled,
+.button[aria-disabled='true'] {
+  cursor: not-allowed;
+  opacity: 0.55;
 }
 button:focus-visible,
 a:focus-visible,
@@ -45,27 +51,20 @@ select:focus-visible {
   outline: 3px solid #df9d2c;
   outline-offset: 2px;
 }
-.warning {
-  background: #fff0cf;
-  text-align: center;
-  padding: 0.45rem;
-  font-size: 0.88rem;
-  border-bottom: 1px solid #e5c985;
-}
 header {
-  height: 64px;
+  min-height: 72px;
   display: flex;
   align-items: center;
   justify-content: space-between;
   padding: 0 max(1rem, calc((100% - 1100px) / 2));
-  background: white;
-  border-bottom: 1px solid var(--line);
+  background: #121212;
+  border-bottom: 1px solid #121212;
 }
 .brand {
   font-size: 1.3rem;
   font-weight: 800;
   text-decoration: none;
-  color: #14231c;
+  color: #fff;
 }
 nav {
   display: flex;
@@ -74,6 +73,23 @@ nav {
 }
 nav form {
   margin: 0;
+}
+header nav > a,
+header nav button {
+  display: inline-flex;
+  align-items: center;
+  min-height: 2.4rem;
+  padding: 0.55rem 0.85rem;
+  border-radius: 0.45rem;
+  background: var(--accent);
+  color: #fff;
+  font-weight: 750;
+  line-height: 1.2;
+  text-decoration: none;
+}
+header nav > a:hover,
+header nav button:hover {
+  background: #f0800a;
 }
 .link {
   background: none;
@@ -149,6 +165,9 @@ nav form {
   justify-content: space-between;
   gap: 1rem;
   flex-wrap: wrap;
+}
+.actions {
+  margin-block: 1rem;
 }
 .tabs {
   border-bottom: 1px solid var(--line);
@@ -236,6 +255,44 @@ dl {
   font-size: 0.78rem;
   font-weight: 700;
 }
+.job-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  font-weight: 700;
+}
+.job-status-dot {
+  width: 0.7rem;
+  height: 0.7rem;
+  flex: 0 0 auto;
+  border: 1px solid #56615b;
+  border-radius: 50%;
+  background: #89938d;
+}
+.job-status.is-open .job-status-dot {
+  border-color: #805d00;
+  background: #e2aa00;
+}
+.job-status.is-draft .job-status-dot {
+  border-color: #4b5563;
+  background: #6b7280;
+}
+.job-status.is-claimed .job-status-dot {
+  border-color: #174ea6;
+  background: #3b82f6;
+}
+.job-status.is-revision .job-status-dot {
+  border-color: #9a4d00;
+  background: var(--accent);
+}
+.job-status.is-success .job-status-dot {
+  border-color: #176239;
+  background: #38a169;
+}
+.job-status.is-cancelled .job-status-dot {
+  border-color: #81281c;
+  background: #c94a37;
+}
 .empty {
   text-align: center;
   padding: 4rem 1rem;
@@ -277,25 +334,197 @@ textarea {
 }
 .checks label,
 .ack,
-fieldset > label:has(input[type='checkbox']) {
+fieldset > label:has(input[type='checkbox']),
+fieldset > label:has(input[type='radio']) {
   display: flex;
   align-items: flex-start;
   font-weight: 400;
 }
 .checks input,
 .ack input,
-fieldset input[type='checkbox'] {
+fieldset input[type='checkbox'],
+fieldset input[type='radio'] {
   width: auto;
   margin: 0.35rem 0.5rem 0 0;
+}
+.field-help {
+  margin: -0.25rem 0 0.5rem;
+  color: #5c6862;
+  font-size: 0.9rem;
+}
+.form-actions {
+  justify-content: flex-start;
+  margin-top: 0.5rem;
+}
+.status-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.55rem;
+}
+.status-dot {
+  width: 0.7rem;
+  height: 0.7rem;
+  flex: 0 0 auto;
+  border: 1px solid #4b5563;
+  border-radius: 50%;
+  background: #6b7280;
 }
 .secondary {
   background: white;
   color: var(--accent-ink);
   box-shadow: inset 0 0 0 1px var(--accent);
 }
+.panel:is(form) {
+  display: grid;
+  gap: 0.85rem;
+}
+.panel:is(form) > h2,
+.panel:is(form) > label {
+  margin-block: 0;
+}
+.panel:is(form) > button,
+.panel:is(form) > .button {
+  justify-self: start;
+  margin-top: 0.25rem;
+}
+.admin-invitation-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+  margin-top: 1rem;
+}
+.admin-invitation-actions form {
+  margin: 0;
+}
 .danger-button {
   background: #992f20;
   color: white;
+}
+.job-detail > * + * {
+  margin-top: 1.5rem;
+}
+.job-detail > h1 + .lead {
+  margin-top: 0.4rem;
+}
+.draft-editor {
+  margin-bottom: 2rem;
+}
+.attachment-panel {
+  margin-block: 2rem 1.25rem;
+}
+.standalone-action {
+  margin-block: 1.25rem;
+}
+.private-job,
+.workspace-section,
+.section-stack {
+  margin-top: 2rem;
+}
+.workspace-section > h2,
+.section-stack > h2,
+.attachment-panel > h2,
+.result-form > h2 {
+  margin-top: 0;
+}
+.prompt-actions {
+  justify-content: flex-start;
+  margin-block: 1.5rem 2rem;
+}
+.result-attachment-panel {
+  margin-bottom: 1.5rem;
+}
+.result-form {
+  margin-bottom: 2rem;
+}
+.table-wrap {
+  width: 100%;
+  overflow-x: auto;
+  margin-top: 1rem;
+}
+.file-table {
+  width: 100%;
+  border-collapse: collapse;
+  text-align: left;
+}
+.file-table th,
+.file-table td {
+  padding: 0.75rem;
+  border-bottom: 1px solid var(--line);
+  vertical-align: top;
+}
+.file-table th {
+  color: #5c6862;
+  font-size: 0.78rem;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+}
+.file-table td:last-child {
+  white-space: nowrap;
+}
+.file-table td:last-child .link + .link {
+  margin-left: 0.75rem;
+}
+.workflow-controls {
+  display: grid;
+  gap: 1.5rem;
+  margin-top: 2rem;
+}
+.revision-card {
+  width: min(100%, 760px);
+}
+.workflow-buttons {
+  justify-content: flex-start;
+  margin: 0;
+}
+.profile-photo-panel {
+  display: flex;
+  align-items: center;
+  gap: 1.5rem;
+  margin-bottom: 1.5rem;
+}
+.profile-photo-panel h2,
+.profile-photo-panel p {
+  margin-top: 0;
+}
+.profile-photo-preview {
+  width: 7rem;
+  height: 7rem;
+  flex: 0 0 auto;
+  display: grid;
+  place-items: center;
+  overflow: hidden;
+  border: 1px solid var(--line);
+  border-radius: 50%;
+  background: var(--accent-soft);
+  color: var(--accent-ink);
+  font-size: 2rem;
+  font-weight: 800;
+}
+.profile-photo-preview img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+.profile-photo-actions {
+  justify-content: flex-start;
+  margin-bottom: 0;
+}
+.file-button {
+  position: relative;
+  display: inline-flex;
+  width: auto;
+  margin: 0;
+  cursor: pointer;
+}
+.file-button input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  opacity: 0;
+}
+.profile-form {
+  gap: 1.1rem;
 }
 pre {
   white-space: pre-wrap;
@@ -315,6 +544,11 @@ pre {
   gap: 1rem;
   padding: 1rem;
   border-bottom: 1px solid var(--line);
+}
+.notifications .job-status {
+  align-self: center;
+  padding: 0.25rem 0.15rem;
+  white-space: nowrap;
 }
 
 @media (max-width: 720px) {
@@ -336,6 +570,14 @@ pre {
   .notifications li {
     grid-template-columns: 1fr;
     gap: 0.4rem;
+  }
+  .profile-photo-panel {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+  .file-table th,
+  .file-table td {
+    min-width: 8rem;
   }
 }
 .unread {
@@ -370,8 +612,5 @@ dd {
   }
   .notifications li {
     grid-template-columns: 1fr;
-  }
-  .warning {
-    text-align: left;
   }
 }

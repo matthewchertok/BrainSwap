@@ -7,6 +7,34 @@ export function statusLabel(s: string) {
     s.charAt(0).toUpperCase() + s.slice(1).replaceAll('_', ' ')
   );
 }
+export function notificationStatus(type: string) {
+  return (
+    (
+      {
+        new_job: 'open',
+        job_claimed: 'claimed',
+        result_submitted: 'submitted',
+        revision_requested: 'revision_requested',
+        job_accepted: 'accepted',
+        job_cancelled: 'cancelled'
+      } as Record<string, string>
+    )[type] ?? type
+  );
+}
+export function notificationLabel(type: string) {
+  return (
+    (
+      {
+        new_job: 'New job',
+        job_claimed: 'Claimed',
+        result_submitted: 'Submitted',
+        revision_requested: 'Revision',
+        job_accepted: 'Accepted',
+        job_cancelled: 'Cancelled'
+      } as Record<string, string>
+    )[type] ?? statusLabel(type)
+  );
+}
 export function controls(role: 'requester' | 'helper' | 'admin' | 'member', status: string) {
   return {
     accept: role === 'requester' && status === 'submitted',
@@ -20,9 +48,23 @@ export function safeNotification(type: string, title: string) {
 }
 
 export function approvalEmailHref(recipient: string) {
-  const query = new URLSearchParams({
-    subject: 'BrainSwap access approved',
-    body: 'Hello,\n\nYour BrainSwap access request has been approved.'
-  });
-  return `mailto:${encodeURIComponent(recipient)}?${query.toString()}`;
+  const subject = encodeURIComponent('BrainSwap access approved');
+  const body = encodeURIComponent('Hello,\n\nYour BrainSwap access request has been approved.');
+  return `mailto:${encodeURIComponent(recipient)}?subject=${subject}&body=${body}`;
+}
+
+export function dateTimeLocalToIso(value: string) {
+  if (!/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/.test(value)) return '';
+  const instant = new Date(value);
+  if (Number.isNaN(instant.getTime()) || isoToDateTimeLocal(instant.toISOString()) !== value) return '';
+  return instant.toISOString();
+}
+
+export function isoToDateTimeLocal(value: string | null, offsetMinutes?: number) {
+  if (!value) return '';
+  const instant = new Date(value);
+  if (Number.isNaN(instant.getTime())) return '';
+  const offset = offsetMinutes ?? instant.getTimezoneOffset();
+  if (!Number.isFinite(offset)) return '';
+  return new Date(instant.getTime() - offset * 60_000).toISOString().slice(0, 16);
 }

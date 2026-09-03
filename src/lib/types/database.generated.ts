@@ -276,6 +276,7 @@ export type Database = {
           current_task: string;
           job_id: string;
           output_format: string;
+          prompt: string;
           success_criteria: string;
           updated_at: string;
         };
@@ -284,6 +285,7 @@ export type Database = {
           current_task: string;
           job_id: string;
           output_format: string;
+          prompt?: string;
           success_criteria: string;
           updated_at?: string;
         };
@@ -292,6 +294,7 @@ export type Database = {
           current_task?: string;
           job_id?: string;
           output_format?: string;
+          prompt?: string;
           success_criteria?: string;
           updated_at?: string;
         };
@@ -307,6 +310,7 @@ export type Database = {
       };
       jobs: {
         Row: {
+          acceptable_models_text: string;
           accepted_submission_id: string | null;
           acknowledgement_version: string | null;
           assigned_to_membership_id: string | null;
@@ -323,7 +327,9 @@ export type Database = {
           listing_summary: string;
           organization_id: string;
           parent_job_id: string | null;
+          preferred_model_text: string;
           published_at: string | null;
+          requester_action_at: string | null;
           required_tools: string[];
           sensitivity: Database['public']['Enums']['job_sensitivity'];
           sensitivity_notes: string | null;
@@ -333,6 +339,7 @@ export type Database = {
           visibility: Database['public']['Enums']['job_visibility'];
         };
         Insert: {
+          acceptable_models_text?: string;
           accepted_submission_id?: string | null;
           acknowledgement_version?: string | null;
           assigned_to_membership_id?: string | null;
@@ -344,21 +351,24 @@ export type Database = {
           deadline?: string | null;
           deletion_pending?: boolean;
           deletion_started_at?: string | null;
-          effort: Database['public']['Enums']['job_effort'];
+          effort?: Database['public']['Enums']['job_effort'];
           id?: string;
           listing_summary: string;
           organization_id: string;
           parent_job_id?: string | null;
+          preferred_model_text?: string;
           published_at?: string | null;
+          requester_action_at?: string | null;
           required_tools?: string[];
-          sensitivity: Database['public']['Enums']['job_sensitivity'];
+          sensitivity?: Database['public']['Enums']['job_sensitivity'];
           sensitivity_notes?: string | null;
           status?: Database['public']['Enums']['job_status'];
           title: string;
           updated_at?: string;
-          visibility: Database['public']['Enums']['job_visibility'];
+          visibility?: Database['public']['Enums']['job_visibility'];
         };
         Update: {
+          acceptable_models_text?: string;
           accepted_submission_id?: string | null;
           acknowledgement_version?: string | null;
           assigned_to_membership_id?: string | null;
@@ -375,7 +385,9 @@ export type Database = {
           listing_summary?: string;
           organization_id?: string;
           parent_job_id?: string | null;
+          preferred_model_text?: string;
           published_at?: string | null;
+          requester_action_at?: string | null;
           required_tools?: string[];
           sensitivity?: Database['public']['Enums']['job_sensitivity'];
           sensitivity_notes?: string | null;
@@ -468,6 +480,7 @@ export type Database = {
       memberships: {
         Row: {
           active: boolean;
+          bio: string | null;
           capabilities: string[];
           claimed_at: string | null;
           claimed_user_id: string | null;
@@ -483,6 +496,7 @@ export type Database = {
         };
         Insert: {
           active?: boolean;
+          bio?: string | null;
           capabilities?: string[];
           claimed_at?: string | null;
           claimed_user_id?: string | null;
@@ -498,6 +512,7 @@ export type Database = {
         };
         Update: {
           active?: boolean;
+          bio?: string | null;
           capabilities?: string[];
           claimed_at?: string | null;
           claimed_user_id?: string | null;
@@ -647,6 +662,59 @@ export type Database = {
           updated_at?: string;
         };
         Relationships: [];
+      };
+      profile_photos: {
+        Row: {
+          cleanup_started_at: string | null;
+          created_at: string;
+          id: string;
+          membership_id: string;
+          mime_type: string;
+          organization_id: string;
+          original_filename: string;
+          ready_at: string | null;
+          safe_filename: string;
+          size_bytes: number;
+          storage_path: string;
+          upload_status: Database['public']['Enums']['upload_status'];
+        };
+        Insert: {
+          cleanup_started_at?: string | null;
+          created_at?: string;
+          id?: string;
+          membership_id: string;
+          mime_type: string;
+          organization_id: string;
+          original_filename: string;
+          ready_at?: string | null;
+          safe_filename: string;
+          size_bytes: number;
+          storage_path: string;
+          upload_status?: Database['public']['Enums']['upload_status'];
+        };
+        Update: {
+          cleanup_started_at?: string | null;
+          created_at?: string;
+          id?: string;
+          membership_id?: string;
+          mime_type?: string;
+          organization_id?: string;
+          original_filename?: string;
+          ready_at?: string | null;
+          safe_filename?: string;
+          size_bytes?: number;
+          storage_path?: string;
+          upload_status?: Database['public']['Enums']['upload_status'];
+        };
+        Relationships: [
+          {
+            foreignKeyName: 'profile_photos_organization_id_membership_id_fkey';
+            columns: ['organization_id', 'membership_id'];
+            isOneToOne: false;
+            referencedRelation: 'memberships';
+            referencedColumns: ['organization_id', 'id'];
+          }
+        ];
       };
       revision_requests: {
         Row: {
@@ -806,11 +874,15 @@ export type Database = {
       submissions: {
         Row: {
           created_at: string;
+          edit_locked_at: string | null;
+          edited_at: string | null;
           id: string;
           job_id: string;
           model_used_text: string;
           notes: string | null;
           organization_id: string;
+          reasoning_effort: string | null;
+          reasoning_effort_other: string | null;
           response_text: string;
           revision_number: number | null;
           status: Database['public']['Enums']['submission_status'];
@@ -820,11 +892,15 @@ export type Database = {
         };
         Insert: {
           created_at?: string;
+          edit_locked_at?: string | null;
+          edited_at?: string | null;
           id?: string;
           job_id: string;
           model_used_text?: string;
           notes?: string | null;
           organization_id: string;
+          reasoning_effort?: string | null;
+          reasoning_effort_other?: string | null;
           response_text?: string;
           revision_number?: number | null;
           status?: Database['public']['Enums']['submission_status'];
@@ -834,11 +910,15 @@ export type Database = {
         };
         Update: {
           created_at?: string;
+          edit_locked_at?: string | null;
+          edited_at?: string | null;
           id?: string;
           job_id?: string;
           model_used_text?: string;
           notes?: string | null;
           organization_id?: string;
+          reasoning_effort?: string | null;
+          reasoning_effort_other?: string | null;
           response_text?: string;
           revision_number?: number | null;
           status?: Database['public']['Enums']['submission_status'];
@@ -876,6 +956,10 @@ export type Database = {
     };
     Functions: {
       accept_job: { Args: { p_job_id: string }; Returns: undefined };
+      admin_delete_unclaimed_invitation: {
+        Args: { p_membership_id: string; p_organization_id: string };
+        Returns: undefined;
+      };
       admin_memberships: {
         Args: { p_organization_id: string };
         Returns: {
@@ -952,6 +1036,21 @@ export type Database = {
         Args: { p_job_id: string };
         Returns: undefined;
       };
+      delete_profile_photo_record: {
+        Args: { p_photo_id: string };
+        Returns: undefined;
+      };
+      edit_submitted_result: {
+        Args: {
+          p_job_id: string;
+          p_model_used_text: string;
+          p_notes: string;
+          p_reasoning_effort: string;
+          p_reasoning_effort_other: string;
+          p_response_text: string;
+        };
+        Returns: undefined;
+      };
       extend_claim: { Args: { p_job_id: string }; Returns: undefined };
       file_cleanup_info: {
         Args: { p_file_id: string; p_kind: string };
@@ -972,6 +1071,10 @@ export type Database = {
         }[];
       };
       finalize_job_file: { Args: { p_file_id: string }; Returns: undefined };
+      finalize_profile_photo: {
+        Args: { p_photo_id: string };
+        Returns: undefined;
+      };
       finalize_submission_file: {
         Args: { p_file_id: string };
         Returns: undefined;
@@ -984,6 +1087,7 @@ export type Database = {
       my_active_memberships: {
         Args: never;
         Returns: {
+          bio: string;
           capabilities: string[];
           display_name: string;
           membership_id: string;
@@ -991,6 +1095,24 @@ export type Database = {
           organization_id: string;
           organization_name: string;
           role: Database['public']['Enums']['member_role'];
+        }[];
+      };
+      profile_photo_cleanup_info: {
+        Args: { p_photo_id: string };
+        Returns: {
+          mime_type: string;
+          original_filename: string;
+          size_bytes: number;
+          storage_path: string;
+        }[];
+      };
+      profile_photo_download_info: {
+        Args: { p_membership_id: string };
+        Returns: {
+          mime_type: string;
+          original_filename: string;
+          size_bytes: number;
+          storage_path: string;
         }[];
       };
       publish_job: { Args: { p_job_id: string }; Returns: undefined };
@@ -1006,6 +1128,18 @@ export type Database = {
           p_filename: string;
           p_job_id: string;
           p_mime_type: string;
+          p_size_bytes: number;
+        };
+        Returns: {
+          id: string;
+          storage_path: string;
+        }[];
+      };
+      reserve_profile_photo: {
+        Args: {
+          p_filename: string;
+          p_mime_type: string;
+          p_organization_id: string;
           p_size_bytes: number;
         };
         Returns: {
@@ -1031,10 +1165,15 @@ export type Database = {
         Args: {
           p_job_id: string;
           p_model_used_text: string;
-          p_notes?: string;
+          p_notes: string;
+          p_reasoning_effort: string;
+          p_reasoning_effort_other: string;
           p_response_text: string;
-          p_tools_used?: string[];
         };
+        Returns: undefined;
+      };
+      update_and_publish_job: {
+        Args: { p_input: Json; p_job_id: string };
         Returns: undefined;
       };
       update_draft_job: {
@@ -1043,7 +1182,7 @@ export type Database = {
       };
       update_profile: {
         Args: {
-          p_capabilities: string[];
+          p_bio: string;
           p_display_name: string;
           p_model_ids: string[];
           p_organization_id: string;

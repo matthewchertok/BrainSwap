@@ -10,9 +10,9 @@ BrainSwap coordinates manual AI task handoffs inside one or more private researc
 
 - invitation and access-request email addresses, membership bindings, roles, and active status;
 - lab-visible job listings;
-- protected task payloads, sensitivity notes, context, external links, and prompts;
+- protected prompts, shared-chat links, and supporting context;
 - model responses, revision instructions, submission history, and follow-up snapshots;
-- uploaded job/result files and Storage object paths;
+- uploaded job/result files, profile photos, and Storage object paths;
 - notification and audit metadata;
 - Supabase Auth cookies/tokens, OAuth codes, provider configuration, Resend API key, and deployment secrets.
 
@@ -52,6 +52,8 @@ No browser value—including organization, membership, actor, role, model, job, 
 | Direct workflow-table mutation                   | Revoke writes; expose only state-specific RPCs                                                  | Local RLS/grant assertions passed; hosted hostile-client tests required                     |
 | Unsafe upload/path guessing                      | Private bucket, exact randomized reservation, positive extension/MIME checks, limits, no upsert | Repository controls present; Storage API tests required                                     |
 | Orphaned or partially deleted files              | Storage API cleanup before guarded metadata deletion; retryable deletion state                  | End-to-end failure/retry test required                                                      |
+| Result correction races requester action         | Lock job/submission rows; author-only in-place edit window; first requester response closes it  | Local adversarial pgTAP plus hosted two-session race required                               |
+| Profile-photo cross-organization access          | Owner-only reservation/deletion; ready-photo organization read; exact randomized private path   | Local policy assertions plus hosted Storage API test required                               |
 | Stored XSS/model-output injection                | Plain-text rendering; no `{@html}`; restrictive CSP                                             | Static/build and signed-out local hydration passed; authenticated hosted CSP test required  |
 | Open redirect/CSRF                               | `/app`-only return validation; POST mutations; SvelteKit origin checks                          | Unit tests/static inspection; deployed OAuth/CSRF test required                             |
 | Sensitive cache/log/notification leakage         | `no-store`; metadata-only records/webhook; no analytics/debug logging                           | Static inspection; hosted headers/log sink test required                                    |
@@ -67,8 +69,10 @@ Storage object names are not secrets or authority. BrainSwap does not need bucke
 - an outsider supplies a victim organization and their own invitation email;
 - an outsider forges an access-request address, repeats one request, or uses many Google accounts to generate mail;
 - a browser submits another membership, model, job, submission, or object UUID;
+- a member deletes another invitation or profile photo, or attempts a cross-organization photo path;
 - two helpers claim concurrently and the loser attempts payload/file access;
 - a claim expires between page load, file upload, and submit;
+- a result author edits while the requester accepts/requests revision, or a file cleanup spans that lock boundary;
 - an historical helper attempts broader parent/child access than intended;
 - a requester follows up from sealed work and attempts implicit file/access inheritance;
 - an upload lies about extension, MIME type, size, or finalization metadata;

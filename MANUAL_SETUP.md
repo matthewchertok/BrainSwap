@@ -144,7 +144,7 @@ npx supabase db push --dry-run
 
 Review the dry run. It must contain only the expected BrainSwap migrations. Do not use `db reset --linked`.
 
-The hardening migration is additive in schema shape, but it deliberately validates stricter invariants. Do not assume it will apply automatically to a populated v0.1 database. First take a recoverable database backup and test the migration against a disposable restored copy. Remediate any legacy HTTP/malformed context URLs, unsupported tool or capability values, inconsistent workflow rows, over-limit or unsafe filenames, and legacy Storage paths before touching the source project. Storage object renames/deletions must use the Storage API, never direct `storage.objects` mutation. For this predeployment repository, a new isolated project from clean migrations is preferred.
+The hardening and workflow migrations are additive in schema shape, but they deliberately validate stricter invariants and retire several legacy UI fields. Do not assume they will apply automatically to a populated v0.1 database. First take a recoverable database backup and test the full migration chain against a disposable restored copy. Review the migration's legacy task/chat-link conversion, and remediate malformed context URLs, unsupported tool/capability values, inconsistent workflow rows, over-limit or unsafe filenames, and legacy Storage paths before touching the source project. Storage object renames/deletions must use the Storage API, never direct `storage.objects` mutation. For this predeployment repository, a new isolated project from clean migrations is preferred.
 
 ## 7. Apply hosted migrations, bucket configuration, types, and bootstrap
 
@@ -160,13 +160,15 @@ npm run check
 In the Supabase dashboard verify that:
 
 - every intended exposed table has RLS enabled;
-- `job-files` is private;
-- the bucket has the 25 MiB and MIME restrictions from `supabase/config.toml`;
+- `job-files` and `profile-photos` are private;
+- `job-files` has the 25 MiB allowlist and `profile-photos` has the 5 MiB image-only allowlist from `supabase/config.toml`;
 - `anon` has no application-table or privileged-RPC access;
 - authenticated users lack direct workflow-table mutation grants; and
 - only intended authenticated RPCs are callable.
 
 Create and guard a fresh temporary bootstrap copy as in step 5, then paste it into the hosted SQL editor. The script also aborts if its built-in placeholders remain. Do not commit or retain the adapted file. Confirm that the initial models and invitation belong to the expected organization.
+
+The current fixed profile catalog is GPT-6 Astra, GPT-5.6 Sol/Terra/Luna, Claude Fable 5.1, Claude Opus 5, Gemini Pro, and SuperGrok. Job-level preferred and acceptable model fields are free-form text and do not grant profile/model access.
 
 ## 8. Configure hosted Google OAuth and Supabase redirects
 

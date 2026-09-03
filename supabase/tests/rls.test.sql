@@ -2,7 +2,7 @@ begin;
 
 -- Updated after all assertions are written. Keeping an explicit plan makes CI
 -- fail if a future edit silently drops an adversarial case.
-select plan(207);
+select plan(264);
 
 -- Fixed identities make failures reproducible. Everything is rolled back.
 insert into auth.users(
@@ -37,38 +37,46 @@ insert into public.memberships(
   ('a0000000-0000-0000-0000-000000000006','aaaaaaaa-0000-0000-0000-000000000001','inactive@example.test','10000000-0000-0000-0000-000000000006','10000000-0000-0000-0000-000000000006','Inactive','member',false,'{}','{"new_matching_jobs":true}',now()),
   ('a0000000-0000-0000-0000-000000000007','aaaaaaaa-0000-0000-0000-000000000001','deactivate@example.test','10000000-0000-0000-0000-000000000011','10000000-0000-0000-0000-000000000011','To deactivate','member',true,'{}','{"new_matching_jobs":true}',now()),
   ('a0000000-0000-0000-0000-000000000009','aaaaaaaa-0000-0000-0000-000000000001','exact@example.test',null,null,null,'member',true,'{}','{"new_matching_jobs":true}',null),
+  ('a0000000-0000-0000-0000-000000000010','aaaaaaaa-0000-0000-0000-000000000001','remove@example.test',null,null,null,'member',true,'{}','{"new_matching_jobs":true}',null),
   ('b0000000-0000-0000-0000-000000000001','bbbbbbbb-0000-0000-0000-000000000001','admin-b@example.test','10000000-0000-0000-0000-000000000008','10000000-0000-0000-0000-000000000008','Admin B','admin',true,'{}','{"new_matching_jobs":true}',now());
 
 insert into public.models(id, organization_id, provider, display_name, active, sort_order) values
-  ('d0000000-0000-0000-0000-000000000001','aaaaaaaa-0000-0000-0000-000000000001','Test','A preferred',true,1),
-  ('d0000000-0000-0000-0000-000000000002','aaaaaaaa-0000-0000-0000-000000000001','Test','A acceptable',true,2),
+  ('d0000000-0000-0000-0000-000000000001','aaaaaaaa-0000-0000-0000-000000000001','OpenAI','GPT-6 Astra',true,1),
+  ('d0000000-0000-0000-0000-000000000002','aaaaaaaa-0000-0000-0000-000000000001','OpenAI','GPT-5.6 Sol',true,2),
   ('d0000000-0000-0000-0000-000000000003','aaaaaaaa-0000-0000-0000-000000000001','Test','A inactive',false,3),
-  ('d0000000-0000-0000-0000-000000000004','bbbbbbbb-0000-0000-0000-000000000001','Test','B preferred',true,1);
+  ('d0000000-0000-0000-0000-000000000004','bbbbbbbb-0000-0000-0000-000000000001','OpenAI','GPT-6 Astra',true,1);
 
 insert into public.jobs(
   id, organization_id, created_by_membership_id, parent_job_id, status, title,
   listing_summary, visibility, sensitivity, sensitivity_notes, effort,
   required_tools, assigned_to_membership_id, claimed_at, claim_expires_at,
-  data_handling_acknowledged_at, acknowledgement_version, published_at
+  data_handling_acknowledged_at, acknowledgement_version, published_at,
+  preferred_model_text, acceptable_models_text
 ) values
-  ('c0000000-0000-0000-0000-000000000001','aaaaaaaa-0000-0000-0000-000000000001','a0000000-0000-0000-0000-000000000002',null,'draft','Complete draft','Draft summary','claimed_only','unpublished','draft sensitivity','quick','{}',null,null,null,now(),'brainswap-data-boundary-v1',null),
-  ('c0000000-0000-0000-0000-000000000002','aaaaaaaa-0000-0000-0000-000000000001','a0000000-0000-0000-0000-000000000002',null,'open','Lab-visible job','Safe lab summary','lab','general',null,'quick','{}',null,null,null,now(),'brainswap-data-boundary-v1',now()),
-  ('c0000000-0000-0000-0000-000000000003','aaaaaaaa-0000-0000-0000-000000000001','a0000000-0000-0000-0000-000000000002',null,'open','Sealed open job','Safe sealed listing','claimed_only','unpublished','sealed notes','medium','{}',null,null,null,now(),'brainswap-data-boundary-v1',now()),
-  ('c0000000-0000-0000-0000-000000000004','aaaaaaaa-0000-0000-0000-000000000001','a0000000-0000-0000-0000-000000000002',null,'claimed','Current sealed claim','Safe current listing','claimed_only','unpublished','parent secret note','medium','{"Code execution"}','a0000000-0000-0000-0000-000000000003',now(),now()+interval '4 hours',now(),'brainswap-data-boundary-v1',now()),
-  ('c0000000-0000-0000-0000-000000000005','aaaaaaaa-0000-0000-0000-000000000001','a0000000-0000-0000-0000-000000000002',null,'claimed','Expired sealed claim','Safe expired listing','claimed_only','unpublished','expired secret','medium','{}','a0000000-0000-0000-0000-000000000003',now()-interval '8 hours',now()-interval '4 hours',now(),'brainswap-data-boundary-v1',now()),
-  ('c0000000-0000-0000-0000-000000000006','aaaaaaaa-0000-0000-0000-000000000001','a0000000-0000-0000-0000-000000000002',null,'submitted','Historical job','Safe historical listing','claimed_only','unpublished','historical secret','heavy','{}',null,null,null,now(),'brainswap-data-boundary-v1',now()),
-  ('c0000000-0000-0000-0000-000000000007','aaaaaaaa-0000-0000-0000-000000000001','a0000000-0000-0000-0000-000000000002',null,'claimed','Deactivate claimant','Safe deactivate listing','claimed_only','unpublished','deactivation secret','medium','{}','a0000000-0000-0000-0000-000000000007',now(),now()+interval '4 hours',now(),'brainswap-data-boundary-v1',now()),
-  ('c0000000-0000-0000-0000-000000000008','aaaaaaaa-0000-0000-0000-000000000001','a0000000-0000-0000-0000-000000000002',null,'cancelled','Delete this job','Safe deletion listing','claimed_only','general',null,'quick','{}',null,null,null,now(),'brainswap-data-boundary-v1',now()),
-  ('c0000000-0000-0000-0000-000000000009','aaaaaaaa-0000-0000-0000-000000000001','a0000000-0000-0000-0000-000000000002',null,'cancelled','Parent with child','Cannot delete first','claimed_only','general',null,'quick','{}',null,null,null,now(),'brainswap-data-boundary-v1',now()),
-  ('c0000000-0000-0000-0000-000000000010','aaaaaaaa-0000-0000-0000-000000000001','a0000000-0000-0000-0000-000000000002','c0000000-0000-0000-0000-000000000009','draft','Child draft','Child listing','claimed_only','general',null,'quick','{}',null,null,null,now(),'brainswap-data-boundary-v1',null),
-  ('c0000000-0000-0000-0000-000000000011','aaaaaaaa-0000-0000-0000-000000000001','a0000000-0000-0000-0000-000000000002',null,'draft','Upload draft','Upload listing','lab','general',null,'quick','{}',null,null,null,now(),'brainswap-data-boundary-v1',null),
-  ('c0000000-0000-0000-0000-000000000012','aaaaaaaa-0000-0000-0000-000000000001','a0000000-0000-0000-0000-000000000002',null,'draft','Pending upload draft','Pending listing','claimed_only','general',null,'quick','{}',null,null,null,now(),'brainswap-data-boundary-v1',null),
-  ('c0000000-0000-0000-0000-000000000013','bbbbbbbb-0000-0000-0000-000000000001','b0000000-0000-0000-0000-000000000001',null,'open','Organization B job','B safe listing','claimed_only','unpublished','B secret','medium','{}',null,null,null,now(),'brainswap-data-boundary-v1',now()),
-  ('c0000000-0000-0000-0000-000000000014','aaaaaaaa-0000-0000-0000-000000000001','a0000000-0000-0000-0000-000000000002',null,'draft','Limit draft','Limit listing','claimed_only','general',null,'quick','{}',null,null,null,now(),'brainswap-data-boundary-v1',null),
-  ('c0000000-0000-0000-0000-000000000015','aaaaaaaa-0000-0000-0000-000000000001','a0000000-0000-0000-0000-000000000002',null,'revision_requested','Expired revision claim','Safe revision listing','claimed_only','unpublished','revision secret','medium','{}','a0000000-0000-0000-0000-000000000003',now()-interval '8 hours',now()-interval '4 hours',now(),'brainswap-data-boundary-v1',now());
+  ('c0000000-0000-0000-0000-000000000001','aaaaaaaa-0000-0000-0000-000000000001','a0000000-0000-0000-0000-000000000002',null,'draft','Complete draft','Draft summary','claimed_only','general',null,'medium','{}',null,null,null,now(),'brainswap-default-public-sharing-v1',null,'Test model','Any frontier model'),
+  ('c0000000-0000-0000-0000-000000000002','aaaaaaaa-0000-0000-0000-000000000001','a0000000-0000-0000-0000-000000000002',null,'open','Published job','Safe listing','claimed_only','general',null,'medium','{}',null,null,null,now(),'brainswap-default-public-sharing-v1',now(),'Test model','Any frontier model'),
+  ('c0000000-0000-0000-0000-000000000003','aaaaaaaa-0000-0000-0000-000000000001','a0000000-0000-0000-0000-000000000002',null,'open','Sealed open job','Safe sealed listing','claimed_only','general',null,'medium','{}',null,null,null,now(),'brainswap-default-public-sharing-v1',now(),'Test model','Any frontier model'),
+  ('c0000000-0000-0000-0000-000000000004','aaaaaaaa-0000-0000-0000-000000000001','a0000000-0000-0000-0000-000000000002',null,'claimed','Current sealed claim','Safe current listing','claimed_only','general',null,'medium','{}','a0000000-0000-0000-0000-000000000003',now(),now()+interval '4 hours',now(),'brainswap-default-public-sharing-v1',now(),'Test model','Any frontier model'),
+  ('c0000000-0000-0000-0000-000000000005','aaaaaaaa-0000-0000-0000-000000000001','a0000000-0000-0000-0000-000000000002',null,'claimed','Expired sealed claim','Safe expired listing','claimed_only','general',null,'medium','{}','a0000000-0000-0000-0000-000000000003',now()-interval '8 hours',now()-interval '4 hours',now(),'brainswap-default-public-sharing-v1',now(),'Test model','Any frontier model'),
+  ('c0000000-0000-0000-0000-000000000006','aaaaaaaa-0000-0000-0000-000000000001','a0000000-0000-0000-0000-000000000002',null,'submitted','Historical job','Safe historical listing','claimed_only','general',null,'medium','{}',null,null,null,now(),'brainswap-default-public-sharing-v1',now(),'Test model','Any frontier model'),
+  ('c0000000-0000-0000-0000-000000000007','aaaaaaaa-0000-0000-0000-000000000001','a0000000-0000-0000-0000-000000000002',null,'claimed','Deactivate claimant','Safe deactivate listing','claimed_only','general',null,'medium','{}','a0000000-0000-0000-0000-000000000007',now(),now()+interval '4 hours',now(),'brainswap-default-public-sharing-v1',now(),'Test model','Any frontier model'),
+  ('c0000000-0000-0000-0000-000000000008','aaaaaaaa-0000-0000-0000-000000000001','a0000000-0000-0000-0000-000000000002',null,'cancelled','Delete this job','Safe deletion listing','claimed_only','general',null,'medium','{}',null,null,null,now(),'brainswap-default-public-sharing-v1',now(),'Test model','Any frontier model'),
+  ('c0000000-0000-0000-0000-000000000009','aaaaaaaa-0000-0000-0000-000000000001','a0000000-0000-0000-0000-000000000002',null,'cancelled','Parent with child','Cannot delete first','claimed_only','general',null,'medium','{}',null,null,null,now(),'brainswap-default-public-sharing-v1',now(),'Test model','Any frontier model'),
+  ('c0000000-0000-0000-0000-000000000010','aaaaaaaa-0000-0000-0000-000000000001','a0000000-0000-0000-0000-000000000002','c0000000-0000-0000-0000-000000000009','draft','Child draft','Child listing','claimed_only','general',null,'medium','{}',null,null,null,now(),'brainswap-default-public-sharing-v1',null,'Test model','Any frontier model'),
+  ('c0000000-0000-0000-0000-000000000011','aaaaaaaa-0000-0000-0000-000000000001','a0000000-0000-0000-0000-000000000002',null,'draft','Upload draft','Upload listing','claimed_only','general',null,'medium','{}',null,null,null,now(),'brainswap-default-public-sharing-v1',null,'Test model','Any frontier model'),
+  ('c0000000-0000-0000-0000-000000000012','aaaaaaaa-0000-0000-0000-000000000001','a0000000-0000-0000-0000-000000000002',null,'draft','Pending upload draft','Pending listing','claimed_only','general',null,'medium','{}',null,null,null,now(),'brainswap-default-public-sharing-v1',null,'Test model','Any frontier model'),
+  ('c0000000-0000-0000-0000-000000000013','bbbbbbbb-0000-0000-0000-000000000001','b0000000-0000-0000-0000-000000000001',null,'open','Organization B job','B safe listing','claimed_only','general',null,'medium','{}',null,null,null,now(),'brainswap-default-public-sharing-v1',now(),'Test model','Any frontier model'),
+  ('c0000000-0000-0000-0000-000000000014','aaaaaaaa-0000-0000-0000-000000000001','a0000000-0000-0000-0000-000000000002',null,'draft','Limit draft','Limit listing','claimed_only','general',null,'medium','{}',null,null,null,now(),'brainswap-default-public-sharing-v1',null,'Test model','Any frontier model'),
+  ('c0000000-0000-0000-0000-000000000015','aaaaaaaa-0000-0000-0000-000000000001','a0000000-0000-0000-0000-000000000002',null,'revision_requested','Expired revision claim','Safe revision listing','claimed_only','general',null,'medium','{}','a0000000-0000-0000-0000-000000000003',now()-interval '8 hours',now()-interval '4 hours',now(),'brainswap-default-public-sharing-v1',now(),'Test model','Any frontier model');
 
-insert into public.job_payloads(job_id, current_task, success_criteria, output_format)
-select j.id, 'protected task for ' || j.id::text, 'done when verified', 'plain text'
+insert into public.job_payloads(job_id, current_task, success_criteria, output_format, prompt)
+select j.id,
+  case when j.id = 'c0000000-0000-0000-0000-000000000001'::uuid
+    then repeat('Legacy task detail. ', 80)
+    else 'protected task for ' || j.id::text
+  end,
+  'done when verified', 'plain text',
+  'protected prompt for ' || j.id::text
 from public.jobs j;
 
 insert into public.job_models(organization_id, job_id, model_id, preference, sort_order)
@@ -83,7 +91,7 @@ insert into public.job_context_items(
   id, organization_id, job_id, kind, label, text_content, url, sort_order
 ) values
   ('ca000000-0000-0000-0000-000000000003','aaaaaaaa-0000-0000-0000-000000000001','c0000000-0000-0000-0000-000000000003','inline_text','Sealed context','never leak this context',null,0),
-  ('ca000000-0000-0000-0000-000000000004','aaaaaaaa-0000-0000-0000-000000000001','c0000000-0000-0000-0000-000000000004','external_link','Protected link',null,'https://example.test/private-link',0);
+  ('ca000000-0000-0000-0000-000000000004','aaaaaaaa-0000-0000-0000-000000000001','c0000000-0000-0000-0000-000000000004','shared_chat','Link to chat',null,'https://example.test/private-link',0);
 
 insert into public.submissions(
   id, job_id, organization_id, submitted_by_membership_id, status,
@@ -132,34 +140,33 @@ language sql
 stable
 as $$
   select jsonb_build_object(
-    'title','Valid draft', 'listing_summary','Safe listing summary',
-    'current_task','Perform the exact next task',
-    'success_criteria','Return a verified result', 'output_format','Plain text',
-    'visibility','claimed_only', 'sensitivity','general',
-    'sensitivity_notes','', 'effort','quick',
+    'title','Valid draft', 'task_summary','Safe listing summary',
+    'prompt','Perform the exact next task',
+    'chat_url','https://example.test/shared-chat',
+    'preferred_model_text','GPT-6 Astra',
+    'acceptable_models_text','Any frontier model',
     'deadline',to_char(now() + interval '1 day','YYYY-MM-DD"T"HH24:MI:SS"Z"'),
-    'required_tools',jsonb_build_array('Code execution'), 'acknowledged',true,
-    'preferred_model_id','d0000000-0000-0000-0000-000000000001',
-    'acceptable_model_ids',jsonb_build_array('d0000000-0000-0000-0000-000000000002'),
-    'contexts',jsonb_build_array(
-      jsonb_build_object('kind','inline_text','label','Context','text_content','Trusted only as text'),
-      jsonb_build_object('kind','external_link','label','Link','url','https://example.test/resource')
-    )
+    'required_tools',jsonb_build_array('Code execution')
   )
 $$;
 
 -- Schema, privilege, and fail-closed structure.
 select has_table('public','jobs','jobs exists');
+select has_table('public','profile_photos','profile photo metadata exists');
 select has_function('public','update_draft_job',array['uuid','jsonb'],'draft updates use an RPC');
+select has_function('public','update_and_publish_job',array['uuid','jsonb'],'visible draft edits and publication can commit atomically');
+select has_function('public','admin_delete_unclaimed_invitation',array['uuid','uuid'],'unclaimed invitations use a narrow deletion RPC');
+select has_function('public','edit_submitted_result',array['uuid','text','text','text','text','text'],'submitted-result correction uses an author-scoped RPC');
+select has_function('public','reserve_profile_photo',array['uuid','text','text','bigint'],'profile photo upload uses an exact reservation RPC');
 select has_function('public','admin_update_membership',array['uuid','uuid','member_role','boolean'],'admin membership lifecycle uses an RPC');
 select has_function('public','file_cleanup_info',array['uuid','text'],'file cleanup path is explicit');
 select has_function('storage','allow_any_operation',array['text[]'],'Storage supports operation-aware RLS');
-select ok((select count(*)=14 and bool_and(c.relrowsecurity)
+select ok((select count(*)=15 and bool_and(c.relrowsecurity)
   from pg_class c join pg_namespace n on n.oid=c.relnamespace
   where n.nspname='public' and c.relname=any(array[
     'organizations','memberships','models','member_models','jobs','job_payloads',
     'job_models','job_context_items','job_files','submissions','submission_files',
-    'revision_requests','notifications','audit_events'
+    'revision_requests','notifications','audit_events','profile_photos'
   ])),'all exposed application tables use RLS');
 select ok((select count(*)=9 and bool_and(convalidated) from pg_constraint where conname in (
   'memberships_claimed_user_consistent','memberships_invited_email_valid','jobs_claim_fields_consistent',
@@ -198,6 +205,11 @@ select ok((select pg_get_functiondef('public.request_revision(uuid,text)'::regpr
   'revision reassignment locks the prior submitter against concurrent deactivation');
 select ok(not has_function_privilege('authenticated','private.locked_actor(uuid)','EXECUTE'),
   'locking actor helper is not directly exposed');
+select is(
+  private.merge_legacy_prompt(E'check every result\nwithout rewriting it', E'JSON object\nwith exact keys'),
+  E'DEFINITION OF DONE\ncheck every result\nwithout rewriting it\n\nDESIRED OUTPUT FORMAT\nJSON object\nwith exact keys',
+  'legacy success criteria and output format are both preserved in the labeled prompt backfill'
+);
 select ok(not exists(
   select 1
   from pg_proc p
@@ -207,14 +219,18 @@ select ok(not exists(
   where n.nspname = 'public'
     and p.proname = any(array[
       'claim_available_memberships','my_active_memberships','create_draft_job',
-      'update_draft_job','publish_job','claim_job','release_job','extend_claim',
+      'update_draft_job','update_and_publish_job','publish_job','claim_job','release_job','extend_claim',
       'create_submission_draft','submit_result','request_revision','accept_job',
       'cancel_job','reopen_job','mark_notification_read','dashboard_jobs',
       'job_workspace','update_profile','admin_upsert_membership',
-      'admin_update_membership','admin_memberships','create_follow_up_draft',
+      'admin_update_membership','admin_delete_unclaimed_invitation',
+      'admin_memberships','create_follow_up_draft','edit_submitted_result',
       'reserve_job_file','finalize_job_file','reserve_submission_file',
       'finalize_submission_file','file_download_info','file_cleanup_info',
-      'delete_file_record','begin_job_deletion','delete_job_after_storage_cleanup'
+      'delete_file_record','begin_job_deletion','delete_job_after_storage_cleanup',
+      'reserve_profile_photo','finalize_profile_photo',
+      'profile_photo_download_info','profile_photo_cleanup_info',
+      'delete_profile_photo_record'
     ])
     and acl.privilege_type = 'EXECUTE'
     and (acl.grantee = 0 or grantee.rolname = 'anon')
@@ -222,19 +238,19 @@ select ok(not exists(
 select ok(
   not exists(
     select 1 from pg_proc p
-    where p.oid = to_regprocedure('public.submit_result(uuid,text,text,text)')
+    where p.oid = to_regprocedure('public.submit_result(uuid,text,text,text,text[])')
       and has_function_privilege('authenticated', p.oid, 'EXECUTE')
   )
   and not exists(
     select 1 from pg_proc p
-    where p.oid = to_regprocedure('public.update_profile(text,text[],uuid[],jsonb)')
+    where p.oid = to_regprocedure('public.update_profile(uuid,text,text[],uuid[],jsonb)')
       and has_function_privilege('authenticated', p.oid, 'EXECUTE')
   ), 'authenticated cannot execute stale broad RPC overloads');
 select ok(
   (select count(*)
    from pg_proc p join pg_namespace n on n.oid = p.pronamespace
        where n.nspname = 'private'
-     and has_function_privilege('authenticated', p.oid, 'EXECUTE')) = 11
+     and has_function_privilege('authenticated', p.oid, 'EXECUTE')) = 15
   and (select count(*)
        from pg_proc p join pg_namespace n on n.oid = p.pronamespace
        where n.nspname = 'private'
@@ -250,8 +266,12 @@ select ok(
            to_regprocedure('private.can_read_submission_file(uuid)'),
            to_regprocedure('private.can_storage_upload(text,jsonb)'),
            to_regprocedure('private.can_storage_download(text)'),
-           to_regprocedure('private.can_storage_delete(text)')
-         ])) = 11
+           to_regprocedure('private.can_storage_delete(text)'),
+           to_regprocedure('private.can_read_profile_photo(uuid)'),
+           to_regprocedure('private.can_profile_photo_storage_upload(text,jsonb)'),
+           to_regprocedure('private.can_profile_photo_storage_download(text)'),
+           to_regprocedure('private.can_profile_photo_storage_delete(text)')
+         ])) = 15
   and not exists(
     select 1
     from pg_proc p
@@ -330,15 +350,15 @@ set local "request.jwt.claim.sub" = '10000000-0000-0000-0000-000000000003';
 select is((select count(id) from public.organizations),1::bigint,'active member can read only its own organization without hidden membership grants');
 select is((select count(id) from public.memberships),1::bigint,'ordinary member sees only its own membership row');
 select is((select count(id) from public.jobs where id='c0000000-0000-0000-0000-000000000001'),0::bigint,'unrelated member cannot see a private draft listing');
-select is((select count(job_id) from public.job_payloads where job_id='c0000000-0000-0000-0000-000000000002'),1::bigint,'active member can read published lab-visible payload');
-select is((select count(job_id) from public.job_models where job_id='c0000000-0000-0000-0000-000000000002'),1::bigint,'active member can read published lab-visible model requirements');
+select is((select count(job_id) from public.job_payloads where job_id='c0000000-0000-0000-0000-000000000002'),0::bigint,'organization membership alone cannot read protected payload');
+select is((select count(job_id) from public.job_models where job_id='c0000000-0000-0000-0000-000000000002'),0::bigint,'organization membership alone cannot read legacy protected model requirements');
 select is((select count(job_id) from public.job_payloads where job_id='c0000000-0000-0000-0000-000000000003'),0::bigint,'unrelated member cannot read sealed payload before claim');
 select is((select count(id) from public.job_context_items where job_id='c0000000-0000-0000-0000-000000000003'),0::bigint,'unrelated member cannot read sealed context before claim');
 select is(public.job_workspace('c0000000-0000-0000-0000-000000000003')->'payload','null'::jsonb,'sealed workspace omits protected payload before claim');
-select is((select count(id) from public.jobs where id='c0000000-0000-0000-0000-000000000011'),0::bigint,'unrelated member cannot see a lab-visible draft listing');
-select is((select count(job_id) from public.job_payloads where job_id='c0000000-0000-0000-0000-000000000011'),0::bigint,'lab visibility never publishes a draft payload');
-select is((select count(id) from public.job_files where job_id='c0000000-0000-0000-0000-000000000011'),0::bigint,'lab visibility never exposes draft file metadata');
-select ok(not private.can_storage_download('aaaaaaaa-0000-0000-0000-000000000001/c0000000-0000-0000-0000-000000000011/job/33333333-3333-3333-3333-333333333333'),'lab-visible draft object is not downloadable by unrelated member');
+select is((select count(id) from public.jobs where id='c0000000-0000-0000-0000-000000000011'),0::bigint,'unrelated member cannot see a sealed draft listing');
+select is((select count(job_id) from public.job_payloads where job_id='c0000000-0000-0000-0000-000000000011'),0::bigint,'sealed visibility never publishes a draft payload');
+select is((select count(id) from public.job_files where job_id='c0000000-0000-0000-0000-000000000011'),0::bigint,'sealed visibility never exposes draft file metadata');
+select ok(not private.can_storage_download('aaaaaaaa-0000-0000-0000-000000000001/c0000000-0000-0000-0000-000000000011/job/33333333-3333-3333-3333-333333333333'),'sealed draft object is not downloadable by unrelated member');
 select throws_ok(
   $$update public.jobs set status='accepted' where id='c0000000-0000-0000-0000-000000000002'$$,
   '42501', null, 'direct workflow mutation is rejected'
@@ -366,8 +386,8 @@ select throws_ok(
   'invalid required tools', 'direct RPC rejects tools outside the supported catalog'
 );
 select throws_ok(
-  $$select public.create_draft_job('aaaaaaaa-0000-0000-0000-000000000001',pg_temp.valid_draft_input() || '{"acknowledged":1}'::jsonb)$$,
-  'invalid acknowledgement or preferred model', 'direct RPC requires a JSON boolean acknowledgement'
+  $$select public.create_draft_job('aaaaaaaa-0000-0000-0000-000000000001',pg_temp.valid_draft_input() - 'prompt')$$,
+  'invalid draft input', 'draft RPC requires the complete typed JSON shape even when field values are blank'
 );
 select throws_ok(
   $$select public.create_draft_job('aaaaaaaa-0000-0000-0000-000000000001',pg_temp.valid_draft_input() || '{"deadline":"2099-01-01T12:00:00"}'::jsonb)$$,
@@ -378,50 +398,20 @@ select throws_ok(
   'deadline must be an ISO-8601 date-time with explicit timezone', 'direct RPC rejects non-ISO timestamp text'
 );
 select throws_ok(
-  $$select public.create_draft_job('aaaaaaaa-0000-0000-0000-000000000001',jsonb_set(pg_temp.valid_draft_input(),'{contexts}','[{"kind":"external_link","label":"bad","url":"https://user:password@evil.test/file"}]'))$$,
-  'invalid external context', 'direct RPC rejects credential-bearing URLs'
+  $$select public.create_draft_job('aaaaaaaa-0000-0000-0000-000000000001',pg_temp.valid_draft_input() || '{"chat_url":"https://user:password@evil.test/file"}'::jsonb)$$,
+  'invalid draft value', 'direct RPC rejects a credential-bearing shared-chat URL'
 );
 select throws_ok(
-  $$select public.create_draft_job('aaaaaaaa-0000-0000-0000-000000000001',jsonb_set(pg_temp.valid_draft_input(),'{contexts}','[{"kind":"external_link","label":"bad","url":"https://:"}]'))$$,
-  'invalid external context', 'direct RPC rejects malformed HTTPS authority'
+  $$select public.create_draft_job('aaaaaaaa-0000-0000-0000-000000000001',pg_temp.valid_draft_input() || '{"chat_url":"https://:"}'::jsonb)$$,
+  'invalid draft value', 'direct RPC rejects malformed shared-chat authority'
 );
 select throws_ok(
-  $$select public.create_draft_job('aaaaaaaa-0000-0000-0000-000000000001',jsonb_set(pg_temp.valid_draft_input(),'{contexts}','[{"kind":"external_link","label":"bad","url":"https://[::::]/"}]'))$$,
-  'invalid external context', 'direct RPC rejects malformed bracketed authorities'
+  $$select public.create_draft_job('aaaaaaaa-0000-0000-0000-000000000001',pg_temp.valid_draft_input() || jsonb_build_object('preferred_model_text',repeat('m',201)))$$,
+  'invalid draft value', 'free-form preferred model text has a database length limit'
 );
 select throws_ok(
-  $$select public.create_draft_job('aaaaaaaa-0000-0000-0000-000000000001',jsonb_set(pg_temp.valid_draft_input(),'{contexts}','[{"kind":"external_link","label":"bad","url":"https://bad_host.example/path"}]'))$$,
-  'invalid external context', 'direct RPC rejects unsupported hostname characters'
-);
-select throws_ok(
-  $$select public.create_draft_job('aaaaaaaa-0000-0000-0000-000000000001',jsonb_set(pg_temp.valid_draft_input(),'{contexts}','[{"kind":"external_link","label":"bad","url":"https://999.1.1.1/path"}]'))$$,
-  'invalid external context', 'direct RPC rejects invalid dotted-numeric host octets'
-);
-select throws_ok(
-  $$select public.create_draft_job('aaaaaaaa-0000-0000-0000-000000000001',jsonb_set(pg_temp.valid_draft_input(),'{contexts}','[{"kind":"external_link","label":"bad","url":"https://example.test:999999999999999999999/path"}]'))$$,
-  'invalid external context', 'direct RPC rejects oversized ports without integer overflow'
-);
-select throws_ok(
-  $$select public.create_draft_job('aaaaaaaa-0000-0000-0000-000000000001',jsonb_set(pg_temp.valid_draft_input(),'{contexts}','[{"kind":"inline_text","label":"one","text_content":"a"},{"kind":"inline_text","label":"two","text_content":"b"}]'))$$,
-  'invalid contexts', 'direct RPC enforces one aggregate inline context'
-);
-select throws_ok(
-  $$select public.create_draft_job(
-    'aaaaaaaa-0000-0000-0000-000000000001',
-    jsonb_set(pg_temp.valid_draft_input(),'{contexts}',(
-      select jsonb_agg(jsonb_build_object('kind','external_link','label','link '||n,'url','https://example.test/'||n))
-      from generate_series(1,11) n
-    ))
-  )$$,
-  'invalid contexts', 'direct RPC caps external/shared links at ten'
-);
-select throws_ok(
-  $$select public.create_draft_job('aaaaaaaa-0000-0000-0000-000000000001',pg_temp.valid_draft_input() || '{"current_task":"   "}'::jsonb)$$,
-  'invalid draft text', 'direct RPC rejects whitespace-only task text'
-);
-select throws_ok(
-  $$select public.create_draft_job('aaaaaaaa-0000-0000-0000-000000000001',pg_temp.valid_draft_input() || '{"preferred_model_id":"d0000000-0000-0000-0000-000000000004","acceptable_model_ids":[]}'::jsonb)$$,
-  'models must be active organization models', 'direct RPC rejects a model from another organization'
+  $$select public.create_draft_job('aaaaaaaa-0000-0000-0000-000000000001',pg_temp.valid_draft_input() || jsonb_build_object('acceptable_models_text',repeat('m',1001)))$$,
+  'invalid draft value', 'free-form acceptable-model text has a database length limit'
 );
 select throws_ok(
   $$select public.cancel_job('c0000000-0000-0000-0000-000000000001')$$,
@@ -432,11 +422,42 @@ select throws_ok(
   'job is incomplete', 'pending upload blocks publication'
 );
 select lives_ok(
-  $$select public.update_draft_job('c0000000-0000-0000-0000-000000000001',jsonb_set(pg_temp.valid_draft_input(),'{current_task}',to_jsonb(E'  Preserve prompt formatting\n'::text)))$$,
+  $$select set_config(
+    'brainswap_test.partial_job',
+    public.create_draft_job(
+      'aaaaaaaa-0000-0000-0000-000000000001',
+      '{"title":"","task_summary":"","prompt":"","chat_url":"","preferred_model_text":"","acceptable_models_text":"","deadline":null,"required_tools":[]}'::jsonb
+    )::text,
+    false
+  )$$,
+  'an entirely blank draft can be saved'
+);
+select ok((
+  select status = 'draft'
+    and title = '' and listing_summary = '' and preferred_model_text = ''
+    and visibility = 'claimed_only' and sensitivity = 'general'
+    and effort = 'medium' and required_tools = '{}'::text[]
+  from public.jobs where id = current_setting('brainswap_test.partial_job')::uuid
+), 'blank drafts retain fixed sealed/general classification without inventing content');
+select throws_ok(
+  $$select public.publish_job(current_setting('brainswap_test.partial_job')::uuid)$$,
+  'job is incomplete', 'publish remains the authoritative completeness gate for partial drafts'
+);
+select lives_ok(
+  $$select public.update_draft_job('c0000000-0000-0000-0000-000000000001',jsonb_set(pg_temp.valid_draft_input(),'{prompt}',to_jsonb(E'  Preserve prompt formatting\n'::text)))$$,
   'requester can update a complete draft through the authoritative RPC'
 );
 reset role;
-select is((select current_task from public.job_payloads where job_id='c0000000-0000-0000-0000-000000000001'),E'  Preserve prompt formatting\n','draft RPC preserves significant prompt whitespace');
+select is((select prompt from public.job_payloads where job_id='c0000000-0000-0000-0000-000000000001'),E'  Preserve prompt formatting\n','draft RPC preserves significant prompt whitespace');
+select ok((select current_task=repeat('Legacy task detail. ',80)
+  from public.job_payloads where job_id='c0000000-0000-0000-0000-000000000001'),
+  'draft updates preserve oversized legacy current-task detail without forcing it into the bounded summary');
+select ok((select success_criteria='' and output_format=''
+  from public.job_payloads where job_id='c0000000-0000-0000-0000-000000000001'),
+  'draft updates leave migrated legacy instruction columns cleared after their prompt backfill');
+select is((select preferred_model_text from public.jobs where id='c0000000-0000-0000-0000-000000000001'),'GPT-6 Astra','free-form preferred model text is stored without a model identifier dependency');
+select is((select count(*) from public.job_models where job_id='c0000000-0000-0000-0000-000000000001'),0::bigint,'new draft writes retire normalized job-model rows');
+select is((select count(*) from public.job_context_items where job_id='c0000000-0000-0000-0000-000000000001' and kind='shared_chat'),1::bigint,'new draft writes allow only one protected shared-chat link');
 
 set local role authenticated;
 set local "request.jwt.claim.sub" = '10000000-0000-0000-0000-000000000003';
@@ -444,12 +465,45 @@ select throws_ok(
   $$select public.publish_job('c0000000-0000-0000-0000-000000000001')$$,
   'not authorized', 'nonrequester cannot publish a draft'
 );
+select throws_ok(
+  $$select public.update_and_publish_job('c0000000-0000-0000-0000-000000000001',pg_temp.valid_draft_input())$$,
+  'not authorized', 'nonrequester cannot atomically edit and publish a draft'
+);
 reset role;
 
 set local role authenticated;
 set local "request.jwt.claim.sub" = '10000000-0000-0000-0000-000000000002';
-select lives_ok($$select public.publish_job('c0000000-0000-0000-0000-000000000001')$$,'requester can publish a complete draft');
+select throws_ok(
+  $$select public.update_and_publish_job(
+    'c0000000-0000-0000-0000-000000000001',
+    jsonb_set(
+      jsonb_set(pg_temp.valid_draft_input(),'{title}',to_jsonb('Must roll back'::text)),
+      '{prompt}',to_jsonb(''::text)
+    )
+  )$$,
+  'job is incomplete', 'atomic publication rejects incomplete visible editor data'
+);
+select is(
+  (select title from public.jobs where id='c0000000-0000-0000-0000-000000000001'),
+  'Valid draft', 'failed atomic publication rolls its draft edits back'
+);
+select lives_ok(
+  $$select public.update_and_publish_job(
+    'c0000000-0000-0000-0000-000000000001',
+    jsonb_set(pg_temp.valid_draft_input(),'{title}',to_jsonb('Published editor title'::text))
+  )$$,
+  'requester can save the visible editor data and publish it atomically'
+);
+select is(
+  (select title from public.jobs where id='c0000000-0000-0000-0000-000000000001'),
+  'Published editor title', 'atomic publication persists the visible editor values'
+);
 select is((select status from public.jobs where id='c0000000-0000-0000-0000-000000000001'),'open'::public.job_status,'publication performs draft to open transition');
+select is((select required_tools from public.jobs where id='c0000000-0000-0000-0000-000000000001'),array['Code execution']::text[],'publication preserves validated required tools');
+select is(public.job_workspace('c0000000-0000-0000-0000-000000000001')->'payload'->>'task_summary',
+  'Safe listing summary', 'new jobs fall back to the listing task summary without duplicating prompt text');
+select is(public.job_workspace('c0000000-0000-0000-0000-000000000001')->'payload'->>'legacy_current_task',
+  repeat('Legacy task detail. ',80), 'published legacy drafts retain their exact oversized task detail separately from the editable summary');
 reset role;
 select is((select count(*) from public.notifications where job_id='c0000000-0000-0000-0000-000000000001' and recipient_membership_id='a0000000-0000-0000-0000-000000000002'),0::bigint,'publication excludes requester from matching notices');
 select ok(not exists(
@@ -485,15 +539,28 @@ set local role authenticated;
 set local "request.jwt.claim.sub" = '10000000-0000-0000-0000-000000000003';
 select lives_ok($$select public.claim_job('c0000000-0000-0000-0000-000000000004')$$,'same active claimant retry is idempotent');
 select is((select count(job_id) from public.job_payloads where job_id='c0000000-0000-0000-0000-000000000004'),1::bigint,'current unexpired claimant sees sealed payload');
+select is(public.job_workspace('c0000000-0000-0000-0000-000000000004')->'payload',jsonb_build_object(
+  'prompt','protected prompt for c0000000-0000-0000-0000-000000000004',
+  'task_summary','Safe current listing',
+  'legacy_current_task','protected task for c0000000-0000-0000-0000-000000000004'
+), 'legacy current task is preserved separately from the bounded protected task summary');
+select is(public.job_workspace('c0000000-0000-0000-0000-000000000004')->'contexts'->0->>'url',
+  'https://example.test/private-link',
+  'participant workspace exposes the preserved shared-chat URL as protected context');
 select is((select count(id) from public.submissions where job_id='c0000000-0000-0000-0000-000000000004'),1::bigint,'claimant sees only its own current draft submission');
 select lives_ok(
   $$select * from public.file_download_info('fa000000-0000-0000-0000-000000000001','submission')$$,
   'current claimant can resolve its own ready draft attachment'
 );
+select is(public.job_workspace('c0000000-0000-0000-0000-000000000004')->'pending_files'->0->>'id',
+  'fa000000-0000-0000-0000-000000000001',
+  'current claimant workspace surfaces its ready draft-result attachment for removal');
+select is(public.job_workspace('c0000000-0000-0000-0000-000000000004')->'pending_files'->0->>'can_cleanup',
+  'true', 'current claimant workspace marks its own draft-result attachment removable');
 select is((select count(job_id) from public.job_payloads where job_id='c0000000-0000-0000-0000-000000000005'),0::bigint,'expired claimant loses sealed payload access');
 select throws_ok(
-  $$select public.submit_result('c0000000-0000-0000-0000-000000000005','Model','late result','',array[]::text[])$$,
-  'claim expired', 'expired claimant cannot submit'
+  $$select public.submit_result('c0000000-0000-0000-0000-000000000005','Model','late result','','low',null)$$,
+  'result incomplete', 'expired claimant cannot submit'
 );
 select throws_ok($$select public.extend_claim('c0000000-0000-0000-0000-000000000005')$$,'claim expired','expired claimant cannot extend');
 select throws_ok($$select public.release_job('c0000000-0000-0000-0000-000000000005')$$,'not current claimant','expired claimant cannot release');
@@ -532,6 +599,7 @@ reset role;
 set local role authenticated;
 set local "request.jwt.claim.sub" = '10000000-0000-0000-0000-000000000002';
 select is(public.job_workspace('c0000000-0000-0000-0000-000000000005')->'pending_files'->0->>'stale','true','workspace marks replaced claimant draft file stale');
+select is(public.job_workspace('c0000000-0000-0000-0000-000000000005')->'pending_files'->0->>'can_cleanup','true','requester workspace marks a stale claimant attachment removable');
 select throws_ok(
   $$select * from public.file_download_info('fa000000-0000-0000-0000-000000000002','submission')$$,
   'file not found', 'stale cleanup authority does not grant draft download'
@@ -550,11 +618,11 @@ select is((select count(*) from public.submission_files where id='fa000000-0000-
 set local role authenticated;
 set local "request.jwt.claim.sub" = '10000000-0000-0000-0000-000000000003';
 select throws_ok(
-  $$select public.submit_result('c0000000-0000-0000-0000-000000000004','Test model','first finalized response','',array['Shell'])$$,
+  $$select public.submit_result('c0000000-0000-0000-0000-000000000004','Test model','first finalized response','','unsupported',null)$$,
   'result incomplete', 'submission tools are validated at the database boundary'
 );
 select lives_ok(
-  $$select public.submit_result('c0000000-0000-0000-0000-000000000004','Test model',E'  first finalized response\n','notes',array['Code execution'])$$,
+  $$select public.submit_result('c0000000-0000-0000-0000-000000000004','Test model',E'  first finalized response\n','notes','high',null)$$,
   'current claimant can submit a complete result'
 );
 reset role;
@@ -563,22 +631,73 @@ select is((select count(*) from public.submissions where job_id='c0000000-0000-0
 
 set local role authenticated;
 set local "request.jwt.claim.sub" = '10000000-0000-0000-0000-000000000003';
+select is((select count(*) from public.dashboard_jobs('aaaaaaaa-0000-0000-0000-000000000001','claimed') where id='c0000000-0000-0000-0000-000000000004'),1::bigint,'an unlocked submitted result remains in the submitter claimed dashboard');
+select throws_ok(
+  $$select public.edit_submitted_result('c0000000-0000-0000-0000-000000000004','Test model','edited response','','other',null)$$,
+  'result is not editable', 'Other reasoning effort requires a bounded explanation'
+);
+select lives_ok(
+  $$select public.edit_submitted_result('c0000000-0000-0000-0000-000000000004','Edited model',E'  corrected finalized response\n','corrected notes','other','Custom budget')$$,
+  'latest submitter can correct a result before requester action'
+);
+select lives_ok(
+  $$select * from public.file_cleanup_info('fa000000-0000-0000-0000-000000000001','submission')$$,
+  'latest submitter can mark an attached submitted-result file for cleanup before review'
+);
 select throws_ok($$select public.request_revision('c0000000-0000-0000-0000-000000000004','Unauthorized revision request.')$$,'not allowed','nonrequester cannot request a revision');
+reset role;
+select ok((select count(*)=1 and min(revision_number)=1 and max(revision_number)=1
+  from public.submissions where job_id='c0000000-0000-0000-0000-000000000004' and status='submitted'),
+  'result correction updates in place without fabricating a new revision');
+select is((select response_text from public.submissions where id='e0000000-0000-0000-0000-000000000001'),E'  corrected finalized response\n','result correction preserves significant response whitespace');
+select ok((select reasoning_effort='other' and reasoning_effort_other='Custom budget' and edited_at is not null
+  from public.submissions where id='e0000000-0000-0000-0000-000000000001'),
+  'result correction stores validated reasoning effort and an edit timestamp');
+
+set local role authenticated;
+set local "request.jwt.claim.sub" = '10000000-0000-0000-0000-000000000004';
+select throws_ok(
+  $$select public.edit_submitted_result('c0000000-0000-0000-0000-000000000004','Attack','overwrite','','low',null)$$,
+  'result is not editable', 'unrelated member cannot edit another member submitted result'
+);
 reset role;
 
 set local role authenticated;
 set local "request.jwt.claim.sub" = '10000000-0000-0000-0000-000000000002';
+select throws_ok(
+  $$select public.edit_submitted_result('c0000000-0000-0000-0000-000000000004','Requester','overwrite','','low',null)$$,
+  'result is not editable', 'requester review authority does not confer result edit authority'
+);
 select lives_ok($$select public.reopen_job('c0000000-0000-0000-0000-000000000004')$$,'requester may reopen a submitted job');
 reset role;
 select is((select status from public.jobs where id='c0000000-0000-0000-0000-000000000004'),'open'::public.job_status,'submitted reopen returns job to an unassigned open state');
+select ok((select j.requester_action_at is not null and s.edit_locked_at is not null
+  from public.jobs j join public.submissions s on s.job_id=j.id and s.status='submitted'
+  where j.id='c0000000-0000-0000-0000-000000000004'),
+  'first requester action atomically closes the submitted-result edit window');
+set local role authenticated;
+set local "request.jwt.claim.sub" = '10000000-0000-0000-0000-000000000002';
+select lives_ok(
+  $$select public.delete_file_record('fa000000-0000-0000-0000-000000000001','submission')$$,
+  'requester can finish deletion of an already cleanup-marked result attachment after locking edits'
+);
+reset role;
+set local role authenticated;
+set local "request.jwt.claim.sub" = '10000000-0000-0000-0000-000000000003';
+select throws_ok(
+  $$select public.edit_submitted_result('c0000000-0000-0000-0000-000000000004','Too late','overwrite','','low',null)$$,
+  'result is not editable', 'submitter cannot edit after requester action'
+);
+select is((select count(*) from public.dashboard_jobs('aaaaaaaa-0000-0000-0000-000000000001','claimed') where id='c0000000-0000-0000-0000-000000000004'),0::bigint,'requester action removes the locked result from the submitter claimed dashboard');
+reset role;
 update public.jobs set status='submitted' where id='c0000000-0000-0000-0000-000000000004';
 
 set local role authenticated;
 set local "request.jwt.claim.sub" = '10000000-0000-0000-0000-000000000002';
 select is((select count(id) from public.submissions where job_id='c0000000-0000-0000-0000-000000000004'),1::bigint,'requester sees submitted result after finalization');
-select lives_ok(
+select throws_ok(
   $$select * from public.file_download_info('fa000000-0000-0000-0000-000000000001','submission')$$,
-  'requester can resolve attachment only after parent submission is finalized'
+  'file not found', 'removed submitted-result attachment cannot be resolved after cleanup'
 );
 select lives_ok(
   $$select public.request_revision('c0000000-0000-0000-0000-000000000004','Please verify one more case.')$$,
@@ -601,28 +720,39 @@ where id='c0000000-0000-0000-0000-000000000004';
 set local role authenticated;
 set local "request.jwt.claim.sub" = '10000000-0000-0000-0000-000000000004';
 select throws_ok(
-  $$select public.submit_result('c0000000-0000-0000-0000-000000000004','Model','unauthorized','',array[]::text[])$$,
-  'claim expired', 'unassigned member cannot submit a revision'
+  $$select public.submit_result('c0000000-0000-0000-0000-000000000004','Model','unauthorized','','low',null)$$,
+  'result incomplete', 'unassigned member cannot submit a revision'
 );
 reset role;
 
 set local role authenticated;
 set local "request.jwt.claim.sub" = '10000000-0000-0000-0000-000000000003';
 select lives_ok(
-  $$select public.submit_result('c0000000-0000-0000-0000-000000000004','Test model','second finalized response','',array[]::text[])$$,
+  $$select public.submit_result('c0000000-0000-0000-0000-000000000004','Test model','second finalized response','','ultra',null)$$,
   'revision claimant can submit a new immutable revision'
 );
 select throws_ok($$select public.accept_job('c0000000-0000-0000-0000-000000000004')$$,'not allowed','helper cannot accept its own result');
 reset role;
 select is((select count(*) from public.submissions where job_id='c0000000-0000-0000-0000-000000000004' and status='submitted'),2::bigint,'submission history keeps both revisions');
-select is((select response_text from public.submissions where id='e0000000-0000-0000-0000-000000000001'),E'  first finalized response\n','submitted model response preserves significant whitespace and remains immutable');
+select is((select response_text from public.submissions where id='e0000000-0000-0000-0000-000000000001'),E'  corrected finalized response\n','locked prior submission preserves the submitter correction and remains immutable');
 select is((select count(*) from public.revision_requests where job_id='c0000000-0000-0000-0000-000000000004' and resolved_at is not null),1::bigint,'new submission resolves the open revision request');
 
 set local role authenticated;
 set local "request.jwt.claim.sub" = '10000000-0000-0000-0000-000000000002';
 select lives_ok($$select public.accept_job('c0000000-0000-0000-0000-000000000004')$$,'requester can accept latest submitted revision');
 select throws_ok($$select public.reopen_job('c0000000-0000-0000-0000-000000000004')$$,'not allowed','accepted job is terminal');
-select lives_ok($$select public.create_follow_up_draft('c0000000-0000-0000-0000-000000000004')$$,'requester can create follow-up from finalized result');
+select lives_ok(
+  $$select set_config(
+    'brainswap_test.follow_up_job',
+    public.create_follow_up_draft('c0000000-0000-0000-0000-000000000004')::text,
+    false
+  )$$,
+  'requester can create follow-up from finalized result'
+);
+select is(
+  public.job_workspace(current_setting('brainswap_test.follow_up_job')::uuid)->'contexts'->0->>'text_content',
+  'second finalized response', 'follow-up requester workspace returns the intentional prior-result snapshot'
+);
 reset role;
 select is((select status from public.jobs where id='c0000000-0000-0000-0000-000000000004'),'accepted'::public.job_status,'acceptance records terminal state');
 select is((select count(*) from public.jobs where parent_job_id='c0000000-0000-0000-0000-000000000004'),1::bigint,'follow-up records parent provenance');
@@ -653,6 +783,14 @@ select is((select count(*) from public.notifications where job_id='c0000000-0000
 
 -- Admin scope, last usable admin, profile scope, and deactivation effects.
 set local role authenticated;
+set local "request.jwt.claim.sub" = '10000000-0000-0000-0000-000000000002';
+select throws_ok(
+  $$select public.admin_delete_unclaimed_invitation('aaaaaaaa-0000-0000-0000-000000000001','a0000000-0000-0000-0000-000000000010')$$,
+  'administrator access required', 'ordinary members cannot remove invitations'
+);
+reset role;
+
+set local role authenticated;
 set local "request.jwt.claim.sub" = '10000000-0000-0000-0000-000000000008';
 select lives_ok(
   $$select public.admin_upsert_membership('bbbbbbbb-0000-0000-0000-000000000001','unclaimed-admin@example.test','admin')$$,
@@ -661,6 +799,10 @@ select lives_ok(
 select throws_ok(
   $$select public.admin_update_membership('bbbbbbbb-0000-0000-0000-000000000001','b0000000-0000-0000-0000-000000000001','member',true)$$,
   'cannot remove the last active administrator', 'unclaimed admin invitation does not satisfy last-admin guard'
+);
+select throws_ok(
+  $$select public.admin_delete_unclaimed_invitation('bbbbbbbb-0000-0000-0000-000000000001','a0000000-0000-0000-0000-000000000010')$$,
+  'only an unclaimed invitation can be removed', 'cross-organization admin cannot remove or probe another organization invitation'
 );
 reset role;
 
@@ -675,24 +817,157 @@ select lives_ok(
   'organization admin can deactivate an in-scope member'
 );
 select throws_ok(
-  $$select public.update_profile('aaaaaaaa-0000-0000-0000-000000000001','Admin A',array['Shell'],array[]::uuid[],'{"new_matching_jobs":true}')$$,
-  'invalid profile', 'profile capabilities use the fixed server-side catalog'
+  $$select public.admin_delete_unclaimed_invitation('aaaaaaaa-0000-0000-0000-000000000001','a0000000-0000-0000-0000-000000000006')$$,
+  'only an unclaimed invitation can be removed', 'inactive but previously claimed membership cannot be deleted as an invitation'
 );
 select throws_ok(
-  $$select public.update_profile('aaaaaaaa-0000-0000-0000-000000000001','Admin A',array[]::text[],array['d0000000-0000-0000-0000-000000000004']::uuid[],'{"new_matching_jobs":true}')$$,
+  $$select public.admin_delete_unclaimed_invitation('aaaaaaaa-0000-0000-0000-000000000001','a0000000-0000-0000-0000-000000000002')$$,
+  'only an unclaimed invitation can be removed', 'active claimed membership cannot be deleted as an invitation'
+);
+select lives_ok(
+  $$select public.admin_delete_unclaimed_invitation('aaaaaaaa-0000-0000-0000-000000000001','a0000000-0000-0000-0000-000000000010')$$,
+  'organization admin can remove an unclaimed invitation'
+);
+select is((select count(*) from public.memberships where id='a0000000-0000-0000-0000-000000000010'),0::bigint,'removed invitation no longer authorizes its email');
+select ok(not exists(
+  select 1 from public.audit_events
+  where event_type='membership_invitation_deleted'
+    and metadata ?| array['email','invited_email']
+), 'invitation deletion audit metadata never records the invited email');
+select throws_ok(
+  $$select public.update_profile('aaaaaaaa-0000-0000-0000-000000000001','Admin A',repeat('x',2001),array[]::uuid[],'{"new_matching_jobs":true}')$$,
+  'invalid profile', 'profile bio length is validated at the database boundary'
+);
+select throws_ok(
+  $$select public.update_profile('aaaaaaaa-0000-0000-0000-000000000001','Admin A','Bio',array['d0000000-0000-0000-0000-000000000004']::uuid[],'{"new_matching_jobs":true}')$$,
   'invalid profile models', 'profile cannot select another organization model'
 );
 select throws_ok(
-  $$select public.update_profile('bbbbbbbb-0000-0000-0000-000000000001','Forged org',array[]::text[],array['d0000000-0000-0000-0000-000000000004']::uuid[],'{"new_matching_jobs":true}')$$,
+  $$select public.update_profile('bbbbbbbb-0000-0000-0000-000000000001','Forged org','Bio',array['d0000000-0000-0000-0000-000000000004']::uuid[],'{"new_matching_jobs":true}')$$,
   'invalid profile', 'organization parameter cannot forge selected membership'
 );
 select lives_ok(
-  $$select public.update_profile('aaaaaaaa-0000-0000-0000-000000000001','Admin A updated',array['Code execution'],array['d0000000-0000-0000-0000-000000000001']::uuid[],'{"new_matching_jobs":false}')$$,
+  $$select public.update_profile(
+    'aaaaaaaa-0000-0000-0000-000000000001',
+    'Admin A updated',
+    'Short profile bio',
+    array[(select id from public.models where organization_id='aaaaaaaa-0000-0000-0000-000000000001' and display_name='GPT-6 Astra')],
+    '{"new_matching_jobs":false}'
+  )$$,
   'valid profile update is selected-organization scoped'
 );
 reset role;
 select ok((select status='open' and assigned_to_membership_id is null and claim_expires_at is null from public.jobs where id='c0000000-0000-0000-0000-000000000007'),'deactivation immediately releases active claim');
 select is((select display_name from public.memberships where id='a0000000-0000-0000-0000-000000000001'),'Admin A updated','profile update changes only selected membership');
+select is((select bio from public.memberships where id='a0000000-0000-0000-0000-000000000001'),'Short profile bio','profile bio is stored only on the selected membership');
+
+-- Profile photos use an exact private reservation and an owner-controlled
+-- cleanup lifecycle, while ready photos are readable inside the organization.
+set local role authenticated;
+set local "request.jwt.claim.sub" = '10000000-0000-0000-0000-000000000001';
+select throws_ok(
+  $$select * from public.reserve_profile_photo('aaaaaaaa-0000-0000-0000-000000000001','attack.svg','image/svg+xml',4)$$,
+  'profile photo not allowed', 'profile photos reject active-content SVG uploads'
+);
+select throws_ok(
+  $$select * from public.reserve_profile_photo('aaaaaaaa-0000-0000-0000-000000000001','large.png','image/png',5242881)$$,
+  'profile photo not allowed', 'profile photos enforce the five MiB limit'
+);
+select lives_ok(
+  $$select
+    set_config('brainswap_test.photo_id',r.id::text,false),
+    set_config('brainswap_test.photo_path',r.storage_path,false)
+  from public.reserve_profile_photo(
+    'aaaaaaaa-0000-0000-0000-000000000001','portrait name.png','image/png',4
+  ) r$$,
+  'profile owner can reserve one valid photo'
+);
+select ok(
+  position('portrait name.png' in current_setting('brainswap_test.photo_path'))=0
+  and private.can_profile_photo_storage_upload(
+    current_setting('brainswap_test.photo_path'),'{"size":4,"mimetype":"image/png"}'::jsonb
+  )
+  and not private.can_profile_photo_storage_upload(
+    current_setting('brainswap_test.photo_path'),'{"size":5,"mimetype":"image/png"}'::jsonb
+  ), 'profile photo path is randomized and accepts only exact reserved metadata'
+);
+reset role;
+
+set local role authenticated;
+set local "request.jwt.claim.sub" = '10000000-0000-0000-0000-000000000003';
+select ok(
+  not private.can_profile_photo_storage_upload(
+    current_setting('brainswap_test.photo_path'),'{"size":4,"mimetype":"image/png"}'::jsonb
+  )
+  and not private.can_profile_photo_storage_delete(current_setting('brainswap_test.photo_path')),
+  'another organization member cannot use or delete the owner reservation'
+);
+reset role;
+
+insert into storage.objects(bucket_id, name, metadata) values (
+  'profile-photos', current_setting('brainswap_test.photo_path'),
+  '{"size":4,"mimetype":"image/png"}'
+);
+
+set local role authenticated;
+set local "request.jwt.claim.sub" = '10000000-0000-0000-0000-000000000001';
+select lives_ok(
+  $$select public.finalize_profile_photo(current_setting('brainswap_test.photo_id')::uuid)$$,
+  'profile owner can finalize the matching exact Storage object'
+);
+reset role;
+
+set local role authenticated;
+set local "request.jwt.claim.sub" = '10000000-0000-0000-0000-000000000003';
+select lives_ok(
+  $$select * from public.profile_photo_download_info('a0000000-0000-0000-0000-000000000001')$$,
+  'active same-organization member can resolve a ready profile photo'
+);
+select is(
+  (select original_filename from public.profile_photo_download_info('a0000000-0000-0000-0000-000000000001')),
+  'portrait-name.png', 'profile photo download metadata returns only the sanitized filename'
+);
+select throws_ok(
+  $$select * from public.profile_photo_cleanup_info(current_setting('brainswap_test.photo_id')::uuid)$$,
+  'profile photo not found', 'nonowner cannot begin profile photo cleanup'
+);
+reset role;
+
+set local role authenticated;
+set local "request.jwt.claim.sub" = '10000000-0000-0000-0000-000000000008';
+select throws_ok(
+  $$select * from public.profile_photo_download_info('a0000000-0000-0000-0000-000000000001')$$,
+  'profile photo not found', 'cross-organization member cannot resolve profile photo metadata'
+);
+select ok(not private.can_profile_photo_storage_download(current_setting('brainswap_test.photo_path')),
+  'cross-organization member cannot download the exact profile photo path');
+reset role;
+
+set local role authenticated;
+set local "request.jwt.claim.sub" = '10000000-0000-0000-0000-000000000001';
+select lives_ok(
+  $$select * from public.profile_photo_cleanup_info(current_setting('brainswap_test.photo_id')::uuid)$$,
+  'profile owner can begin cleanup'
+);
+select ok(
+  private.can_profile_photo_storage_delete(current_setting('brainswap_test.photo_path'))
+  and not private.can_profile_photo_storage_download(current_setting('brainswap_test.photo_path')),
+  'cleanup authorizes only owner deletion and immediately disables download'
+);
+reset role;
+
+set local "storage.allow_delete_query" = 'true';
+delete from storage.objects
+where bucket_id='profile-photos' and name=current_setting('brainswap_test.photo_path');
+
+set local role authenticated;
+set local "request.jwt.claim.sub" = '10000000-0000-0000-0000-000000000001';
+select lives_ok(
+  $$select public.delete_profile_photo_record(current_setting('brainswap_test.photo_id')::uuid)$$,
+  'profile owner can remove metadata after exact Storage cleanup'
+);
+reset role;
+select is((select count(*) from public.profile_photos),0::bigint,'completed profile photo cleanup leaves no metadata row');
 
 set local role authenticated;
 set local "request.jwt.claim.sub" = '10000000-0000-0000-0000-000000000011';

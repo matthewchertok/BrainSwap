@@ -4,7 +4,7 @@ BrainSwap is a private, invitation-only task-handoff application for a small res
 
 ## Review status
 
-**Current recommendation: `BLOCK PILOT`.** The local pass completed formatting, Svelte/type checks, lint, unit tests, the heuristic scan, the Cloudflare production build, a fresh database reset, SQL lint, and database-type generation; all 207 pgTAP assertions passed. The reset applied both migrations and updated the private `job-files` bucket. Hosted Google OAuth has completed successfully for the invited bootstrap administrator, but the full authenticated actor matrix, real Storage API behavior, hosted RLS/configuration, and remaining browser acceptance items are still open. Do not use real unpublished research data until the blocking items in [the audit report](docs/audit-report.md) are closed.
+**Current recommendation: `BLOCK PILOT`.** The local pass completed formatting, Svelte/type checks, lint, 40 unit tests, the heuristic scan, the Cloudflare production build, a fresh database reset, SQL lint, and database-type generation; all 264 pgTAP assertions passed. The reset applied all three migrations and configured the private `job-files` and `profile-photos` buckets. Hosted Google OAuth has completed successfully for the invited bootstrap administrator, but the full authenticated actor matrix, real Storage API behavior, hosted RLS/configuration, cleanup races, and remaining browser acceptance items are still open. Do not use real unpublished research data until the blocking items in [the audit report](docs/audit-report.md) are closed.
 
 ## Architecture
 
@@ -13,13 +13,17 @@ BrainSwap is a private, invitation-only task-handoff application for a small res
 - Supabase Google/PKCE Auth with cookie-based SSR sessions
 - Supabase PostgreSQL with RLS as the final authorization boundary
 - Narrow PostgreSQL RPCs for workflow and administrative mutations
-- One private Supabase Storage bucket, `job-files`
+- Two private Supabase Storage buckets: `job-files` for task/result attachments and `profile-photos` for organization-visible profile images
 - Server-only Resend delivery for verified Google-account access requests
 - Vitest for application tests and pgTAP for database authorization tests
 
 Server requests use the caller's Supabase cookie session and publishable key. No service-role key is required by the application. Organization selection is an HTTP-only convenience cookie that must be matched to a current active membership on every protected operation.
 
 Adding an exact-email invitation in the admin screen changes eligibility but does not send an invitation email automatically. Each unclaimed invitation includes an **Email approval** link that opens the administrator's mail application with a short approval message addressed to that person. An uninvited person may instead choose **Request access**, verify their address through Google, and have BrainSwap send that one address to the configured operator. The operator still decides whether to add an invitation; the request never creates a membership.
+
+Jobs use one sealed workflow. Organization members can see published titles and task summaries, but the prompt, shared-chat link, and files remain limited to the requester, administrators, and the current authorized helper. Drafts may be incomplete; publication remains the completeness gate. Job model preferences are free-form text, while profiles use a fixed organization-scoped model catalog. A result author may correct the latest submitted result in place until the requester first accepts, requests a revision, cancels, reopens, or creates a follow-up.
+
+The profile's new-job preference currently controls in-app notifications only. Automatic organization-wide job email is deliberately deferred until a verified BrainSwap sending domain and its hosted delivery/logging acceptance tests are in place.
 
 ## Repository layout
 

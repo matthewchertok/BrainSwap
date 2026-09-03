@@ -1,4 +1,7 @@
 <script lang="ts">
+  import JobStatus from '$lib/components/JobStatus.svelte';
+  import { notificationLabel, notificationStatus } from '$lib/ui';
+
   let { data, form } = $props();
 </script>
 
@@ -8,8 +11,8 @@
     class="notifications"
   >
     {#each data.notifications as n}<li class:unread={!n.read_at}>
-        <span class="pill">{n.type.replaceAll('_', ' ')}</span>{#if n.job_id}<a href={'/app/jobs/' + n.job_id}
-            >{n.message}</a
+        <JobStatus status={notificationStatus(n.type)} label={notificationLabel(n.type)} />{#if n.job_id}<a
+            href={'/app/jobs/' + n.job_id}>{n.message}</a
           >{:else}{n.message}{/if}<time>{new Date(n.created_at).toLocaleString()}</time>
         {#if !n.read_at}<form method="POST" action="?/read">
             <input type="hidden" name="notification_id" value={n.id} /><button class="link">Mark read</button>

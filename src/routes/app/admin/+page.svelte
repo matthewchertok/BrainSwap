@@ -36,20 +36,18 @@
           <button>Save membership</button>
         </form>
         {#if !m.claimed}
-          <p>
-            <a
-              class="button secondary"
-              href={approvalEmailHref(m.invited_email)}
-              aria-label={`Email access approval to ${m.invited_email}`}>Email approval</a
-            >
-          </p>
+          <div class="admin-invitation-actions">
+            {#if m.active}<a
+                class="button secondary"
+                href={approvalEmailHref(m.invited_email)}
+                aria-label={`Email access approval to ${m.invited_email}`}>Email approval</a
+              >{/if}
+            <form method="POST" action="?/delete_invitation">
+              <input type="hidden" name="membership_id" value={m.id} />
+              <button class="danger-button">Remove invitation</button>
+            </form>
+          </div>
         {/if}
       </article>{/each}
   </div>
-</section>
-<section>
-  <h2>Models</h2>
-  <ul>
-    {#each data.models as m}<li>{m.display_name} ({m.provider}) — {m.active ? 'active' : 'inactive'}</li>{/each}
-  </ul>
 </section>

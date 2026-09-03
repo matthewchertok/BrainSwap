@@ -1,10 +1,11 @@
 <script lang="ts">
   import { goto, invalidateAll } from '$app/navigation';
+  import JobStatus from '$lib/components/JobStatus.svelte';
   import { runnablePrompt } from '$lib/prompt';
   import { downloadPrivateFile, uploadReservedFile } from '$lib/storage';
   import { getBrowserSupabase } from '$lib/supabase-browser';
-  import { statusLabel } from '$lib/ui';
-  import { JOB_TOOLS, validFile } from '$lib/validation';
+  import { dateTimeLocalToIso, isoToDateTimeLocal } from '$lib/ui';
+  import { JOB_TOOLS, REASONING_EFFORTS, validFile } from '$lib/validation';
 
   let { data, form } = $props();
   let w = $derived(data.workspace);
@@ -13,7 +14,51 @@
   let fileMessage = $state('');
   let jobFileDescription = $state('');
   let resultFileDescription = $state('');
+  let editorJobId = $state('');
+  let deadlineLocal = $state('');
+  let reasoningEffort = $state('medium');
+  let reasoningEffortOther = $state('');
+  let draftTitle = $state('');
+  let draftTaskSummary = $state('');
+  let draftPrompt = $state('');
+  let draftChatUrl = $state('');
+  let draftPreferredModel = $state('');
+  let draftAcceptableModels = $state('');
+  let draftTools = $state<string[]>([]);
+  let resultModel = $state('');
+  let resultResponse = $state('');
+  let resultNotes = $state('');
+  let uploadingFile = $state<{
+    kind: 'job' | 'submission';
+    original_filename: string;
+    description: string;
+  } | null>(null);
+  initializeEditor();
+  let deadlineIso = $derived(dateTimeLocalToIso(deadlineLocal));
   let prompt = $derived(w.payload ? runnablePrompt(w.payload, w.contexts ?? [], w.files ?? []) : '');
+
+  $effect(() => {
+    const nextJobId = w.job.id;
+    if (nextJobId === editorJobId) return;
+    initializeEditor();
+  });
+
+  function initializeEditor() {
+    editorJobId = w.job.id;
+    deadlineLocal = isoToDateTimeLocal(w.job.deadline);
+    draftTitle = w.job.title ?? '';
+    draftTaskSummary = w.payload?.task_summary ?? w.job.listing_summary ?? '';
+    draftPrompt = w.payload?.prompt ?? w.payload?.success_criteria ?? '';
+    draftChatUrl = chatUrl();
+    draftPreferredModel = w.job.preferred_model_text ?? '';
+    draftAcceptableModels = w.job.acceptable_models_text ?? '';
+    draftTools = [...(w.job.required_tools ?? [])];
+    reasoningEffort = w.editable_submission?.reasoning_effort ?? 'medium';
+    reasoningEffortOther = w.editable_submission?.reasoning_effort_other ?? '';
+    resultModel = w.editable_submission?.model_used_text ?? '';
+    resultResponse = w.editable_submission?.response_text ?? '';
+    resultNotes = w.editable_submission?.notes ?? '';
+  }
 
   async function copy() {
     try {
@@ -39,6 +84,7 @@
     const reserveName = kind === 'job' ? 'reserve_job_file' : 'reserve_submission_file';
     const finalizeName = kind === 'job' ? 'finalize_job_file' : 'finalize_submission_file';
     const description = kind === 'job' ? jobFileDescription : resultFileDescription;
+    uploadingFile = { kind, original_filename: file.name, description: description.trim() };
     let reservation: { id: string; storage_path: string } | null = null;
     try {
       const { data: reserved, error: reserveError } = await client.rpc(reserveName, {
@@ -65,6 +111,7 @@
       }`;
       if (!cleaned) await invalidateAll();
     } finally {
+      uploadingFile = null;
       busy = false;
     }
   }
@@ -167,24 +214,17 @@
     }
   }
 
-  function priorContext() {
-    return (w.contexts ?? [])
-      .filter((context: { kind: string }) => context.kind === 'inline_text')
-      .map((context: { text_content?: string }) => context.text_content ?? '')
-      .filter(Boolean)
-      .join('\n\n');
+  function chatUrl() {
+    return (
+      (w.contexts ?? []).find((context: { kind: string; url?: string }) => context.kind === 'shared_chat')?.url ?? ''
+    );
   }
 
-  function externalUrls() {
-    return (w.contexts ?? [])
-      .filter((context: { kind: string }) => ['external_link', 'shared_chat'].includes(context.kind))
-      .map((context: { url?: string }) => context.url ?? '')
-      .filter(Boolean)
-      .join('\n');
-  }
-
-  function modelPreference(id: string) {
-    return (w.models ?? []).find((model: { id: string }) => model.id === id)?.preference;
+  function previousResults() {
+    return (w.contexts ?? []).filter(
+      (context: { kind: string; text_content?: string | null }) =>
+        context.kind === 'previous_job' && context.text_content
+    );
   }
 
   function resultFilesIncomplete() {
@@ -192,6 +232,17 @@
       (file: { kind: string; upload_status: string; cleanup_started_at?: string | null }) =>
         file.kind === 'submission' && (file.upload_status !== 'ready' || file.cleanup_started_at)
     );
+  }
+
+  function recoverySubmissionFiles() {
+    if (w.permissions.submit || w.permissions.edit_submission) return [];
+    return (w.pending_files ?? []).filter(
+      (file: { kind: string; can_cleanup?: boolean }) => file.kind === 'submission' && file.can_cleanup
+    );
+  }
+
+  function effortLabel(value: string) {
+    return value === 'extra_high' ? 'Extra High' : value.charAt(0).toUpperCase() + value.slice(1);
   }
 </script>
 
@@ -209,23 +260,13 @@
     {fileMessage}
   </p>{/if}
 
-<article>
+<article class="job-detail">
   <div class="card-top">
-    <span class="pill">{statusLabel(w.job.status)}</span><span
-      >{w.job.visibility === 'claimed_only' ? 'Sealed task' : 'Lab-visible task'}</span
-    >
+    <JobStatus status={w.job.status} />
   </div>
-  <h1>{w.job.title}</h1>
-  <p class="lead">{w.job.listing_summary}</p>
+  <h1>{w.job.title || 'Untitled draft'}</h1>
+  <p class="lead">{w.payload?.task_summary ?? w.job.task_summary ?? w.job.listing_summary}</p>
   <dl class="metadata">
-    <div>
-      <dt>Effort</dt>
-      <dd>{w.job.effort}</dd>
-    </div>
-    <div>
-      <dt>Sensitivity</dt>
-      <dd>{w.job.sensitivity}</dd>
-    </div>
     <div>
       <dt>Deadline</dt>
       <dd>{w.job.deadline ? new Date(w.job.deadline).toLocaleString() : 'None'}</dd>
@@ -235,229 +276,323 @@
       <dd>{w.job.required_tools?.join(', ') || 'None'}</dd>
     </div>
     <div>
-      <dt>Models</dt>
-      <dd>
-        {(w.models ?? [])
-          .map((model: { display_name: string; preference: string }) => `${model.display_name} (${model.preference})`)
-          .join(', ') || 'None'}
-      </dd>
+      <dt>Preferred model</dt>
+      <dd>{w.job.preferred_model_text || 'None specified'}</dd>
     </div>
+    {#if w.job.acceptable_models_text}<div>
+        <dt>Other acceptable models</dt>
+        <dd>{w.job.acceptable_models_text}</dd>
+      </div>{/if}
     {#if w.protected?.claim_expires_at}<div>
         <dt>Claim expires</dt>
         <dd>{new Date(w.protected.claim_expires_at).toLocaleString()}</dd>
       </div>{/if}
   </dl>
 
-  {#if w.protected?.sensitivity_notes}<section class="danger">
-      <h2>Handling notes</h2>
-      <pre>{w.protected.sensitivity_notes}</pre>
+  {#if w.payload?.legacy_current_task}<section class="workspace-section">
+      <h2>Legacy task details</h2>
+      <pre>{w.payload.legacy_current_task}</pre>
+    </section>{/if}
+
+  {#if previousResults().length}<section class="workspace-section">
+      <h2>Prior finalized result</h2>
+      {#each previousResults() as context}<pre>{context.text_content}</pre>{/each}
     </section>{/if}
 
   {#if w.permissions.update}
-    <form method="POST" action="?/update" class="job-form panel">
+    <form id="draft-editor" method="POST" action="?/update" class="job-form panel draft-editor">
       <h2>Edit draft</h2>
-      <label>Title<input name="title" value={w.job.title} maxlength="120" required /></label>
+      <label>Title<input name="title" bind:value={draftTitle} maxlength="120" /></label>
       <label
-        >Lab-visible listing summary<textarea name="listing_summary" maxlength="1000" required
-          >{w.job.listing_summary}</textarea
-        ></label
+        >Task summary<textarea name="task_summary" rows="4" maxlength="1000" bind:value={draftTaskSummary}
+        ></textarea></label
       >
+      <label>Prompt<textarea name="prompt" rows="10" maxlength="100000" bind:value={draftPrompt}></textarea></label>
       <label
-        >Exact current task<textarea name="current_task" rows="8" maxlength="100000" required
-          >{w.payload.current_task}</textarea
-        ></label
-      >
-      <label
-        >Definition of done<textarea name="success_criteria" maxlength="25000" required
-          >{w.payload.success_criteria}</textarea
-        ></label
-      >
-      <label
-        >Desired output format<textarea name="output_format" maxlength="10000" required
-          >{w.payload.output_format}</textarea
-        ></label
-      >
-      <label>Prior context<textarea name="prior_context" rows="8" maxlength="250000">{priorContext()}</textarea></label>
-      <label
-        >Institutional or shared links<textarea name="external_urls" rows="3" maxlength="20480"
-          >{externalUrls()}</textarea
-        ></label
-      >
-      <label
-        >Preferred model<select name="preferred_model_id" required>
-          {#each data.availableModels as model}<option
-              value={model.id}
-              selected={modelPreference(model.id) === 'preferred'}>{model.display_name}</option
-            >{/each}
-        </select></label
-      >
-      <fieldset>
-        <legend>Other acceptable models</legend>
-        {#each data.availableModels as model}<label
-            ><input
-              type="checkbox"
-              name="acceptable_model_ids"
-              value={model.id}
-              checked={modelPreference(model.id) === 'acceptable'}
-            />{model.display_name}</label
-          >{/each}
-      </fieldset>
-      <fieldset>
-        <legend>Required tools</legend>
-        {#each JOB_TOOLS as tool}<label
-            ><input
-              type="checkbox"
-              name="required_tools"
-              value={tool}
-              checked={w.job.required_tools?.includes(tool)}
-            />{tool}</label
-          >{/each}
-      </fieldset>
-      <label
-        >Effort<select name="effort">
-          {#each ['quick', 'medium', 'heavy'] as effort}<option value={effort} selected={w.job.effort === effort}
-              >{effort}</option
-            >{/each}
-        </select></label
-      >
-      <label
-        >Deadline (ISO timestamp with offset)<input
-          name="deadline"
-          value={w.job.deadline ?? ''}
-          placeholder="2026-09-30T17:00:00-04:00"
+        >Link to chat (optional)<input
+          type="url"
+          name="chat_url"
+          bind:value={draftChatUrl}
+          maxlength="2048"
+          placeholder="https://chatgpt.com/share/…"
         /></label
       >
       <label
-        >Visibility<select name="visibility">
-          <option value="claimed_only" selected={w.job.visibility === 'claimed_only'}>Sealed until claimed</option>
-          <option value="lab" selected={w.job.visibility === 'lab'}>Lab-visible</option>
-        </select></label
+        >Preferred model<input
+          name="preferred_model_text"
+          bind:value={draftPreferredModel}
+          maxlength="200"
+          placeholder="GPT-6 Astra"
+        /></label
       >
       <label
-        >Sensitivity<select name="sensitivity">
-          {#each ['general', 'unpublished', 'collaborator', 'other'] as sensitivity}<option
-              value={sensitivity}
-              selected={w.job.sensitivity === sensitivity}>{sensitivity}</option
-            >{/each}
-        </select></label
+        >Other acceptable models (optional)<input
+          name="acceptable_models_text"
+          bind:value={draftAcceptableModels}
+          maxlength="1000"
+          placeholder="Any frontier model"
+        /></label
       >
+      <fieldset>
+        <legend>Required tools (optional)</legend>
+        {#each JOB_TOOLS as tool}<label
+            ><input type="checkbox" name="required_tools" value={tool} bind:group={draftTools} />{tool}</label
+          >{/each}
+      </fieldset>
       <label
-        >Sensitivity notes<textarea name="sensitivity_notes" maxlength="10000"
-          >{w.protected?.sensitivity_notes ?? ''}</textarea
-        ></label
+        >Deadline (optional)<input
+          type="datetime-local"
+          name="deadline_local"
+          bind:value={deadlineLocal}
+          step="60"
+          aria-describedby="edit-deadline-help"
+        /></label
       >
-      <label class="ack"
-        ><input type="checkbox" name="acknowledged" value="yes" checked required />I am authorized to share this content
-        with eligible helpers and the selected provider.</label
-      >
-      <button>Save draft</button>
+      <input type="hidden" name="deadline" value={deadlineIso} />
+      <p id="edit-deadline-help" class="field-help">Choose the date and time in your device’s local timezone.</p>
+      <button name="intent" value="draft" class="status-button" formnovalidate>
+        <span class="status-dot is-draft" aria-hidden="true"></span>
+        Save draft
+      </button>
     </form>
 
-    <section class="panel">
-      <h2>Attach job file</h2>
-      <p>Allowlisted formats only, 25 MiB per file and 100 MiB total. Files are not malware-scanned.</p>
+    <section class="panel attachment-panel">
+      <h2>Attach relevant files</h2>
+      <p>Maximum 25 MiB per file and 100 MiB total.</p>
       <label>Description<input bind:value={jobFileDescription} maxlength="1000" /></label>
       <label>File<input type="file" disabled={busy} onchange={(event) => upload(event, 'job')} /></label>
+
+      {#if w.files?.length || (w.pending_files ?? []).some((file: { kind: string }) => file.kind === 'job') || uploadingFile?.kind === 'job'}
+        <div class="table-wrap">
+          <table class="file-table">
+            <thead><tr><th>File</th><th>Description</th><th>Status</th><th>Actions</th></tr></thead>
+            <tbody>
+              {#each w.files ?? [] as file}<tr>
+                  <td>{file.original_filename}</td><td>{file.description || '—'}</td><td>Uploaded</td><td>
+                    <button
+                      type="button"
+                      class="link"
+                      disabled={busy}
+                      onclick={() => download({ ...file, kind: 'job' })}>Download</button
+                    >
+                    <button
+                      type="button"
+                      class="link danger-text"
+                      disabled={busy}
+                      onclick={() => removeFile({ ...file, kind: 'job' })}>Remove</button
+                    >
+                  </td>
+                </tr>{/each}
+              {#each (w.pending_files ?? []).filter((file: { kind: string }) => file.kind === 'job') as file}<tr>
+                  <td>{file.original_filename}</td><td>{file.description || '—'}</td><td
+                    >{file.cleanup_started_at
+                      ? 'Removing'
+                      : file.upload_status === 'ready'
+                        ? 'Uploaded'
+                        : 'Pending'}</td
+                  ><td>
+                    {#if file.upload_status !== 'ready' && !file.cleanup_started_at}<button
+                        type="button"
+                        class="link"
+                        disabled={busy}
+                        onclick={() => retryFinalize(file)}>Retry</button
+                      >{/if}
+                    <button type="button" class="link danger-text" disabled={busy} onclick={() => removeFile(file)}
+                      >Remove</button
+                    >
+                  </td>
+                </tr>{/each}
+              {#if uploadingFile?.kind === 'job'}<tr>
+                  <td>{uploadingFile.original_filename}</td><td>{uploadingFile.description || '—'}</td><td>Uploading</td
+                  ><td>—</td>
+                </tr>{/if}
+            </tbody>
+          </table>
+        </div>
+      {/if}
     </section>
+
+    {#if w.permissions.publish}<div class="standalone-action">
+        <button type="submit" form="draft-editor" name="intent" value="publish">Publish job</button>
+      </div>{/if}
   {/if}
 
-  {#if w.files?.length}<section>
-      <h2>Job files</h2>
-      <ul>
-        {#each w.files as file}<li>
-            <button type="button" class="link" disabled={busy} onclick={() => download({ ...file, kind: 'job' })}
-              >Download {file.original_filename}</button
-            >
-            ({Math.ceil(file.size_bytes / 1024)} KiB)
-            {#if w.permissions.update}<button
-                type="button"
-                class="link danger-text"
-                disabled={busy}
-                onclick={() => removeFile({ ...file, kind: 'job' })}>Remove</button
-              >{/if}
-          </li>{/each}
-      </ul>
-    </section>{/if}
-
-  {#if w.pending_files?.length && !w.job.deletion_pending}<section class="panel">
-      <h2>Current draft attachments</h2>
-      <ul>
-        {#each w.pending_files as file}<li>
-            {file.original_filename} · {file.stale
-              ? 'stale draft attachment'
-              : file.cleanup_started_at
-                ? 'cleanup pending'
-                : file.upload_status}
-            {#if !file.stale && file.upload_status === 'ready' && !file.cleanup_started_at}<button
-                type="button"
-                class="link"
-                onclick={() => download(file)}>Download</button
-              >{:else if !file.stale && !file.cleanup_started_at}<button
-                type="button"
-                class="link"
-                disabled={busy}
-                onclick={() => retryFinalize(file)}>Retry finalization</button
-              >{/if}
-            <button type="button" class="link danger-text" disabled={busy} onclick={() => removeFile(file)}
-              >Remove</button
-            >
-          </li>{/each}
-      </ul>
-    </section>{/if}
-
-  {#if w.permissions.publish}<form method="POST" action="?/publish" class="actions">
-      <button>Publish job</button>
-    </form>{/if}
-
-  {#if !w.payload}<section class="sealed">
-      <h2>Sealed task</h2>
-      <p>The protected instructions become available only to an authorized participant.</p>
+  {#if !w.payload}<section class="panel private-job">
+      <h2>Ready to help?</h2>
+      <p>Claim this job to view its prompt, chat link, and relevant files.</p>
       {#if w.permissions.claim}<form method="POST" action="?/claim"><button>Claim for four hours</button></form>{/if}
     </section>{:else if !w.permissions.update}<section class="workspace">
-      <h2>Current task</h2>
-      <pre>{w.payload.current_task}</pre>
-      <h2>Definition of done</h2>
-      <pre>{w.payload.success_criteria}</pre>
-      <h2>Output format</h2>
-      <pre>{w.payload.output_format}</pre>
-      <h2>Context</h2>
-      {#if !(w.contexts ?? []).length}<p>None supplied.</p>{/if}
-      {#each w.contexts ?? [] as context}<div class="context">
-          <strong>{context.label}</strong>{#if context.url}<a
-              href={context.url}
-              target="_blank"
-              rel="noopener noreferrer">Open external link</a
-            >{/if}
-          <pre>{context.text_content ?? ''}</pre>
-        </div>{/each}
-      <div class="actions">
-        <button type="button" onclick={copy}>{copied ? 'Copied' : 'Copy runnable prompt'}</button>
-        {#if w.permissions.claim}<form method="POST" action="?/claim"><button>Claim for four hours</button></form>{/if}
+      <section class="workspace-section">
+        <h2>Prompt</h2>
+        <pre>{w.payload.prompt ?? w.payload.success_criteria}</pre>
+      </section>
+
+      {#if chatUrl() && w.job.status !== 'open'}<section class="workspace-section">
+          <h2>Link to chat</h2>
+          <a href={chatUrl()} target="_blank" rel="noopener noreferrer">Open shared chat</a>
+        </section>{/if}
+
+      {#if w.files?.length}<section class="workspace-section">
+          <h2>Relevant files</h2>
+          <div class="table-wrap">
+            <table class="file-table">
+              <thead><tr><th>File</th><th>Description</th><th>Action</th></tr></thead>
+              <tbody
+                >{#each w.files as file}<tr>
+                    <td>{file.original_filename}</td><td>{file.description || '—'}</td><td
+                      ><button
+                        type="button"
+                        class="link"
+                        disabled={busy}
+                        onclick={() => download({ ...file, kind: 'job' })}>Download</button
+                      ></td
+                    >
+                  </tr>{/each}</tbody
+              >
+            </table>
+          </div>
+        </section>{/if}
+
+      <div class="actions prompt-actions">
+        {#if w.permissions.copy_prompt}<button type="button" onclick={copy}
+            >{copied ? 'Copied' : 'Copy runnable prompt'}</button
+          >{/if}
         {#if w.permissions.extend}<form method="POST" action="?/extend"><button>Extend claim</button></form>{/if}
         {#if w.permissions.release}<form method="POST" action="?/release">
             <button class="secondary">Release</button>
           </form>{/if}
       </div>
-      {#if w.permissions.submit}<section class="panel">
-          <h2>Attach result file</h2>
+
+      {#if w.permissions.submit || w.permissions.edit_submission}<section
+          class="panel attachment-panel result-attachment-panel"
+        >
+          <h2>Attach result files</h2>
+          <p>Maximum 25 MiB per file and 100 MiB total.</p>
           <label>Description<input bind:value={resultFileDescription} maxlength="1000" /></label>
           <label>File<input type="file" disabled={busy} onchange={(event) => upload(event, 'submission')} /></label>
+
+          {#if w.editable_submission?.files?.length || (w.pending_files ?? []).some((file: { kind: string }) => file.kind === 'submission') || uploadingFile?.kind === 'submission'}
+            <div class="table-wrap">
+              <table class="file-table">
+                <thead><tr><th>File</th><th>Description</th><th>Status</th><th>Actions</th></tr></thead>
+                <tbody>
+                  {#each w.editable_submission?.files ?? [] as file}<tr>
+                      <td>{file.original_filename}</td><td>{file.description || '—'}</td><td>Uploaded</td><td>
+                        <button
+                          type="button"
+                          class="link"
+                          disabled={busy}
+                          onclick={() => download({ ...file, kind: 'submission' })}>Download</button
+                        >
+                        <button
+                          type="button"
+                          class="link danger-text"
+                          disabled={busy}
+                          onclick={() => removeFile({ ...file, kind: 'submission' })}>Remove</button
+                        >
+                      </td>
+                    </tr>{/each}
+                  {#each (w.pending_files ?? []).filter((file: { kind: string }) => file.kind === 'submission') as file}<tr
+                    >
+                      <td>{file.original_filename}</td><td>{file.description || '—'}</td><td
+                        >{file.cleanup_started_at
+                          ? 'Removing'
+                          : file.upload_status === 'ready'
+                            ? 'Uploaded'
+                            : 'Pending'}</td
+                      ><td>
+                        {#if file.upload_status !== 'ready' && !file.cleanup_started_at}<button
+                            type="button"
+                            class="link"
+                            disabled={busy}
+                            onclick={() => retryFinalize(file)}>Retry</button
+                          >{/if}
+                        {#if file.can_cleanup}<button
+                            type="button"
+                            class="link danger-text"
+                            disabled={busy}
+                            onclick={() => removeFile(file)}>Remove</button
+                          >{:else}<span class="field-help"
+                            >Cleanup is available to the requester or an administrator.</span
+                          >{/if}
+                      </td>
+                    </tr>{/each}
+                  {#if uploadingFile?.kind === 'submission'}<tr>
+                      <td>{uploadingFile.original_filename}</td><td>{uploadingFile.description || '—'}</td><td
+                        >Uploading</td
+                      ><td>—</td>
+                    </tr>{/if}
+                </tbody>
+              </table>
+            </div>
+          {/if}
         </section>
-        <form method="POST" action="?/submit" class="panel">
-          <h2>Return result</h2>
-          <label>Exact model used<input name="model_used_text" maxlength="200" required /></label>
+
+        <form
+          method="POST"
+          action={w.permissions.edit_submission ? '?/edit_submission' : '?/submit'}
+          class="panel result-form"
+        >
+          <h2>{w.permissions.edit_submission ? 'Edit result' : 'Return result'}</h2>
+          <label
+            >Exact model used<input name="model_used_text" bind:value={resultModel} maxlength="200" required /></label
+          >
           <fieldset>
-            <legend>Tools used</legend>
-            {#each JOB_TOOLS as tool}<label><input type="checkbox" name="tools_used" value={tool} />{tool}</label
+            <legend>Reasoning effort</legend>
+            {#each REASONING_EFFORTS as effort}<label
+                ><input
+                  type="radio"
+                  name="reasoning_effort"
+                  value={effort}
+                  bind:group={reasoningEffort}
+                  required
+                />{effortLabel(effort)}</label
               >{/each}
+            {#if reasoningEffort === 'other'}<label
+                >Please specify<input
+                  name="reasoning_effort_other"
+                  bind:value={reasoningEffortOther}
+                  maxlength="200"
+                  required
+                /></label
+              >{:else}<input type="hidden" name="reasoning_effort_other" value="" />{/if}
           </fieldset>
-          <label>Full output<textarea name="response_text" rows="12" maxlength="500000" required></textarea></label>
-          <label>Notes / limitations<textarea name="notes" maxlength="25000"></textarea></label>
-          <button disabled={busy || resultFilesIncomplete()}>Submit immutable result</button>
+          <label
+            >Full output<textarea name="response_text" rows="12" maxlength="500000" required bind:value={resultResponse}
+            ></textarea></label
+          >
+          <label
+            >Other notes (optional)<textarea name="notes" maxlength="25000" bind:value={resultNotes}></textarea></label
+          >
+          <button disabled={busy || resultFilesIncomplete()}
+            >{w.permissions.edit_submission ? 'Save changes' : 'Submit'}</button
+          >
         </form>{/if}
     </section>{/if}
 
-  {#if w.revision_requests?.length}<section>
+  {#if recoverySubmissionFiles().length}<section class="panel attachment-panel recovery-attachment-panel">
+      <h2>Attachment cleanup</h2>
+      <p>These unfinished or stale result attachments can be removed safely.</p>
+      <div class="table-wrap">
+        <table class="file-table">
+          <thead><tr><th>File</th><th>Description</th><th>Status</th><th>Action</th></tr></thead>
+          <tbody>
+            {#each recoverySubmissionFiles() as file}<tr>
+                <td>{file.original_filename}</td>
+                <td>{file.description || '—'}</td>
+                <td>{file.cleanup_started_at ? 'Removal pending' : file.stale ? 'Stale draft' : 'Pending'}</td>
+                <td
+                  ><button type="button" class="link danger-text" disabled={busy} onclick={() => removeFile(file)}
+                    >Remove</button
+                  ></td
+                >
+              </tr>{/each}
+          </tbody>
+        </table>
+      </div>
+    </section>{/if}
+
+  {#if w.revision_requests?.length}<section class="section-stack">
       <h2>Revision requests</h2>
       {#each w.revision_requests as revision}<article class="context">
           <strong>{new Date(revision.created_at).toLocaleString()}</strong>
@@ -466,42 +601,55 @@
         </article>{/each}
     </section>{/if}
 
-  {#if w.submissions?.length}<section>
+  {#if w.submissions?.length}<section class="section-stack">
       <h2>Submission history</h2>
       {#each w.submissions as submission}<article class="submission">
           <h3>Revision {submission.revision_number} · {submission.model_used_text}</h3>
           <pre>{submission.response_text}</pre>
+          {#if submission.reasoning_effort}<p>
+              Reasoning effort: {effortLabel(submission.reasoning_effort)}{submission.reasoning_effort_other
+                ? ` — ${submission.reasoning_effort_other}`
+                : ''}
+            </p>{/if}
           {#if submission.notes}<p>{submission.notes}</p>{/if}
-          {#if submission.tools_used?.length}<p>Tools: {submission.tools_used.join(', ')}</p>{/if}
-          {#if submission.files?.length}<ul>
-              {#each submission.files as file}<li>
-                  <button
-                    type="button"
-                    class="link"
-                    disabled={busy}
-                    onclick={() => download({ ...file, kind: 'submission' })}>Download {file.original_filename}</button
-                  >
-                </li>{/each}
-            </ul>{/if}
+          {#if submission.files?.length}<div class="table-wrap">
+              <table class="file-table">
+                <thead><tr><th>File</th><th>Description</th><th>Action</th></tr></thead>
+                <tbody
+                  >{#each submission.files as file}<tr>
+                      <td>{file.original_filename}</td><td>{file.description || '—'}</td><td
+                        ><button
+                          type="button"
+                          class="link"
+                          disabled={busy}
+                          onclick={() => download({ ...file, kind: 'submission' })}>Download</button
+                        ></td
+                      >
+                    </tr>{/each}</tbody
+                >
+              </table>
+            </div>{/if}
         </article>{/each}
     </section>{/if}
 
-  <div class="actions workflow-controls">
+  <div class="workflow-controls">
     {#if w.permissions.accept}<form method="POST" action="?/accept"><button>Accept result</button></form>{/if}
-    {#if w.permissions.revise}<form method="POST" action="?/revise" class="panel">
-        <label>Revision instructions<textarea name="instructions" maxlength="25000" required></textarea></label><button
-          >Request revision</button
+    {#if w.permissions.revise}<form method="POST" action="?/revise" class="panel revision-card">
+        <label>Revision instructions<textarea name="instructions" rows="6" maxlength="25000" required></textarea></label
         >
+        <button>Request revision</button>
       </form>{/if}
-    {#if w.permissions.cancel}<form method="POST" action="?/cancel">
-        <button class="danger-button">Cancel job</button>
-      </form>{/if}
-    {#if w.permissions.reopen}<form method="POST" action="?/reopen"><button>Reopen job</button></form>{/if}
-    {#if w.permissions.follow_up}<form method="POST" action="?/follow_up">
-        <button class="secondary">Create follow-up draft</button>
-      </form>{/if}
-    {#if w.permissions.delete}<button type="button" class="danger-button" disabled={busy} onclick={deleteJob}
-        >{w.job.deletion_pending ? 'Retry deletion' : 'Delete job'}</button
-      >{/if}
+    <div class="actions workflow-buttons">
+      {#if w.permissions.cancel}<form method="POST" action="?/cancel">
+          <button class="danger-button">Cancel job</button>
+        </form>{/if}
+      {#if w.permissions.reopen}<form method="POST" action="?/reopen"><button>Reopen job</button></form>{/if}
+      {#if w.permissions.follow_up}<form method="POST" action="?/follow_up">
+          <button class="secondary">Create follow-up draft</button>
+        </form>{/if}
+      {#if w.permissions.delete}<button type="button" class="danger-button" disabled={busy} onclick={deleteJob}
+          >{w.job.deletion_pending ? 'Retry deletion' : 'Delete job'}</button
+        >{/if}
+    </div>
   </div>
 </article>

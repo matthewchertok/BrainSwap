@@ -2,7 +2,7 @@ import { error, fail, redirect, type Cookies } from '@sveltejs/kit';
 import { parseJobForm } from '$lib/server/job-form';
 import { requireSelectedMembership, type ActiveMembership } from '$lib/server/membership';
 import { sendMetadataWebhook } from '$lib/server/notifications';
-import { jobIdSchema, revisionSchema, submissionSchema } from '$lib/validation';
+import { jobIdSchema, jobIntentSchema, revisionSchema, submissionSchema } from '$lib/validation';
 import type { Actions } from './$types';
 
 export const load = async ({ locals, params, url, parent }) => {
@@ -19,16 +19,8 @@ export const load = async ({ locals, params, url, parent }) => {
   if (jobError || !job) error(404, 'Job not found or not available');
   const { data, error: workspaceError } = await locals.supabase.rpc('job_workspace', { p_job_id: id.data });
   if (workspaceError || !data) error(404, 'Job not found or not available');
-  const { data: availableModels, error: modelsError } = await locals.supabase
-    .from('models')
-    .select('id,display_name,provider,sort_order')
-    .eq('organization_id', membership.organization_id)
-    .eq('active', true)
-    .order('sort_order');
-  if (modelsError) error(503, 'Model configuration is temporarily unavailable.');
   return {
     workspace: data,
-    availableModels: availableModels ?? [],
     notice: notice(url.searchParams),
     publishError: url.searchParams.has('publish_error')
   };
@@ -43,20 +35,30 @@ export const actions: Actions = {
   reopen: async (event) => workflowMutation(event, 'reopen_job', 'job_reopened'),
   publish: async (event) => workflowMutation(event, 'publish_job', 'job_published'),
   update: async ({ locals, params, request, cookies, url }) => {
-    const { id } = await actionContext(locals, cookies, url, params.id);
+    const { id, membership } = await actionContext(locals, cookies, url, params.id);
     const form = await request.formData();
-    const parsed = parseJobForm(form);
+    const intent = jobIntentSchema.safeParse(form.get('intent') ?? 'draft');
+    if (!intent.success) return fail(400, { message: 'Choose whether to save or publish the draft.' });
+    const parsed = parseJobForm(form, intent.data);
     if (!parsed.success)
       return fail(400, {
-        message: 'Review the draft requirements.',
+        message:
+          intent.data === 'publish'
+            ? 'Complete the required fields before publishing.'
+            : 'Review the draft requirements.',
         issues: parsed.error.flatten().fieldErrors
       });
-    const { error: updateError } = await locals.supabase.rpc('update_draft_job', {
+    const rpcName = intent.data === 'publish' ? 'update_and_publish_job' : 'update_draft_job';
+    const { error: updateError } = await locals.supabase.rpc(rpcName, {
       p_job_id: id,
       p_input: parsed.input
     });
-    if (updateError) return fail(400, { message: 'The draft could not be updated.' });
-    redirect(303, `/app/jobs/${id}?saved=1`);
+    if (updateError)
+      return fail(400, {
+        message: intent.data === 'publish' ? 'The draft could not be published.' : 'The draft could not be updated.'
+      });
+    if (intent.data === 'publish') await notify('job_published', id, membership);
+    redirect(303, `/app/jobs/${id}?${intent.data === 'publish' ? 'published' : 'saved'}=1`);
   },
   revise: async ({ locals, params, request, cookies, url }) => {
     const { id, membership } = await actionContext(locals, cookies, url, params.id);
@@ -78,7 +80,8 @@ export const actions: Actions = {
       model_used_text: form.get('model_used_text'),
       response_text: form.get('response_text'),
       notes: form.get('notes') ?? '',
-      tools_used: form.getAll('tools_used')
+      reasoning_effort: form.get('reasoning_effort'),
+      reasoning_effort_other: form.get('reasoning_effort_other') ?? ''
     });
     if (!parsed.success) return fail(400, { message: 'Review the result fields and limits.' });
     const { error: submissionError } = await locals.supabase.rpc('submit_result', {
@@ -86,11 +89,34 @@ export const actions: Actions = {
       p_model_used_text: parsed.data.model_used_text,
       p_response_text: parsed.data.response_text,
       p_notes: parsed.data.notes,
-      p_tools_used: parsed.data.tools_used
+      p_reasoning_effort: parsed.data.reasoning_effort,
+      p_reasoning_effort_other: parsed.data.reasoning_effort_other
     });
     if (submissionError) return fail(400, { message: 'The result could not be submitted.' });
     await notify('result_submitted', id, membership);
     redirect(303, `/app/jobs/${id}?submitted=1`);
+  },
+  edit_submission: async ({ locals, params, request, cookies, url }) => {
+    const { id } = await actionContext(locals, cookies, url, params.id);
+    const form = await request.formData();
+    const parsed = submissionSchema.safeParse({
+      model_used_text: form.get('model_used_text'),
+      response_text: form.get('response_text'),
+      notes: form.get('notes') ?? '',
+      reasoning_effort: form.get('reasoning_effort'),
+      reasoning_effort_other: form.get('reasoning_effort_other') ?? ''
+    });
+    if (!parsed.success) return fail(400, { message: 'Review the corrected result fields and limits.' });
+    const { error: editError } = await locals.supabase.rpc('edit_submitted_result', {
+      p_job_id: id,
+      p_model_used_text: parsed.data.model_used_text,
+      p_response_text: parsed.data.response_text,
+      p_notes: parsed.data.notes,
+      p_reasoning_effort: parsed.data.reasoning_effort,
+      p_reasoning_effort_other: parsed.data.reasoning_effort_other
+    });
+    if (editError) return fail(400, { message: 'This result can no longer be edited.' });
+    redirect(303, `/app/jobs/${id}?corrected=1`);
   },
   follow_up: async ({ locals, params, cookies, url }) => {
     const { id, membership } = await actionContext(locals, cookies, url, params.id);
@@ -135,9 +161,11 @@ async function notify(type: string, jobId: string, membership: ActiveMembership)
 }
 
 function notice(params: URLSearchParams) {
+  if (params.has('published')) return 'Job published.';
   if (params.has('created')) return 'Draft created.';
   if (params.has('saved')) return 'Draft saved.';
   if (params.has('submitted')) return 'Result submitted.';
+  if (params.has('corrected')) return 'Result updated.';
   if (params.has('revised')) return 'Revision requested.';
   if (params.has('changed')) return 'Job updated.';
   return null;
