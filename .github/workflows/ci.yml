@@ -2,9 +2,12 @@ name: CI
 on:
   push:
   pull_request:
+permissions:
+  contents: read
 jobs:
   app:
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     env:
       PUBLIC_SUPABASE_URL: http://127.0.0.1:54321
       PUBLIC_SUPABASE_PUBLISHABLE_KEY: build-only-placeholder
@@ -13,7 +16,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
-        with: { node-version: 22, cache: npm }
+        with: { node-version: 24.15.0, cache: npm }
       - run: npm ci
       - run: npm run format:check
       - run: npm run check
@@ -23,10 +26,11 @@ jobs:
       - run: npm run build
   database:
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
-        with: { node-version: 22, cache: npm }
+        with: { node-version: 24.15.0, cache: npm }
       - run: npm ci
       - run: npm run db:start
       - run: npm run db:reset

@@ -1,16 +1,42 @@
-# MVP v0.1 implementation plan
+# MVP implementation and verification plan
 
-1. **Scaffold/tooling** — strict SvelteKit/Cloudflare project, lint/format/test/CI, centralized branding.
-2. **Database boundary** — organization-scoped schema, constraints/indexes, private authorization helpers, RLS/grants, Storage policies, atomic RPC workflows, bootstrap data, pgTAP tests.
-3. **Authentication** — SSR cookie client, verified claims, Google PKCE callback, exact-email claiming, active-organization selection.
-4. **Workflow and files** — drafts through terminal states, claim leases, immutable revisions, server reservations/direct Storage upload/finalization, cleanup-before-delete.
-5. **Interface** — responsive protected dashboard, job editor/workspace/history, profile/admin, notification inbox, safe exports.
-6. **Hardening and delivery** — validation/security headers, tests, threat review, setup/acceptance documentation, production build.
+Status date: 2026-09-03 (America/New_York)
 
-## Decisions
+This is a status document, not a statement that the application is deployment-ready. `Implemented` means code is present. `Locally executed` means a command was run in the audit environment. `Manual` means a hosted operator must verify it. The current release gate is `BLOCK PILOT`.
 
-- SQL functions own state transitions; ordinary clients receive read grants but no direct workflow-table writes.
-- The selected organization cookie is an opaque UUID hint, never authority.
-- Files upload browser-to-Supabase after a metadata reservation; deletion calls Storage before an RPC removes records.
-- User material is plain text. External links are displayed but never fetched or previewed.
-- Email/webhook notifications are metadata-only and webhook delivery is best effort after committed transitions.
+## Workstreams
+
+| Workstream                           | Repository status                                                                                                                                            | Verification still required                                                                                |
+| ------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------- |
+| SvelteKit/Cloudflare scaffold        | Implemented; final format/type/lint/unit/security/build pass and limited signed-out desktop/mobile localhost preview passed                                  | Real Cloudflare deploy-preview, authenticated browser, keyboard, and external-link tests                   |
+| Supabase schema and RLS              | Fresh reset applied both migrations and the private bucket update; SQL lint passed with no errors; all 207 pgTAP assertions passed locally                   | Hosted policy/configuration inspection and authenticated hostile-client acceptance                         |
+| Google/PKCE authentication           | Login, callback code exchange, verified-claims hook, restricted return paths, and no-store authentication responses implemented                              | Local or hosted OAuth end-to-end test, redirect allowlist inspection, sign-out test                        |
+| Membership and organizations         | Exact-email claim, immutable claim-owner field, selected-organization enforcement, administrator update/deactivation, and last-admin guard implemented       | Hosted authenticated invite theft, deactivation, last-admin, and cross-organization acceptance             |
+| Jobs and results                     | Draft editing plus publish/claim/release/extend/submit/revise/accept/cancel/reopen application and SQL paths implemented                                     | State-transition matrix, race, expiry, immutable-history, and browser workflow tests                       |
+| Sealed content                       | Explicit listing/workspace projections and separate payload/result authorization are present; local actor-matrix pgTAP tests passed                          | Authenticated browser and hosted Storage verification                                                      |
+| Files                                | Both job/result reservation, direct upload, finalization, authorized download, retryable cleanup, and deletion paths implemented                             | End-to-end Storage tests, failure recovery, and 100 MiB accounting against local and hosted services       |
+| Follow-up jobs                       | Requester action, same-organization parent provenance, finalized-result snapshot, and no implicit file copy implemented                                      | Actor tests and browser confirmation that parent authorization is not inherited                            |
+| Administration/profile/notifications | Selected-organization admin/profile actions, role/active updates, mark-read, safe notification text, and post-commit metadata-only webhook calls implemented | Admin scoping, deactivation, last-admin, per-organization profile, notification, and webhook failure tests |
+| Documentation and operations         | Runbook, threat model, acceptance plan, and audit report updated; clean local database gates completed                                                       | Execute the hosted runbook and record synthetic-data acceptance evidence                                   |
+
+## Required release sequence
+
+1. Complete focused code and migration corrections without bypassing RLS or adding service credentials.
+2. Reset a clean local Supabase stack and apply every migration in order.
+3. Run SQL lint and the complete pgTAP adversarial matrix.
+4. Regenerate database types and run all application checks on supported Node 24.
+5. Deploy only with synthetic data to an isolated pilot project.
+6. Verify Google OAuth, invitations, organization selection, RLS, Storage, headers, deletion recovery, and browser layouts.
+7. Resolve every critical/high finding and any failed acceptance item.
+8. Obtain lab approval for data classification, providers, retention, backups, and incident response.
+9. Reassess the recommendation. Do not admit real unpublished research while it remains `BLOCK PILOT`.
+
+## Design decisions
+
+- SQL functions own workflow transitions; browser clients do not receive direct workflow-table mutation grants.
+- The organization cookie is a UUID selection hint, never authority.
+- Public RPCs derive actors from `auth.uid()` and use explicit NULL-safe authorization.
+- Files upload browser-to-Supabase only after an exact metadata reservation; deletion calls the Storage API before guarded database cleanup.
+- External links are displayed but never fetched or previewed.
+- User/model material is plain text. Notification and audit metadata remain payload-free.
+- A follow-up stores an intentional text snapshot for provenance but inherits no parent-file or parent-access authorization.

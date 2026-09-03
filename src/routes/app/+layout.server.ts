@@ -1,24 +1,19 @@
 import { redirect } from '@sveltejs/kit';
+import { getActiveMemberships, getSelectedMembership, setSelectedOrganization } from '$lib/server/membership';
+
 export const load = async ({ locals, cookies, url }) => {
   if (!locals.userId) redirect(303, `/login?next=${encodeURIComponent(url.pathname)}`);
-  const { data } = await locals.supabase.rpc('my_active_memberships');
-  if (!data?.length) {
-    await locals.supabase.auth.signOut();
+  const memberships = await getActiveMemberships(locals);
+  if (!memberships.length) {
+    const { error: signOutError } = await locals.supabase.auth.signOut();
+    if (signOutError) await locals.supabase.auth.signOut({ scope: 'local' });
     redirect(303, '/unauthorized');
   }
-  let selected = cookies.get('brainswap_org');
-  const active = data.find((m: { organization_id: string }) => m.organization_id === selected);
-  if (!active) {
-    if (data.length > 1) redirect(303, '/app/select-organization');
-    const defaultOrganization = data[0]!.organization_id;
-    selected = defaultOrganization;
-    cookies.set('brainswap_org', defaultOrganization, {
-      path: '/app',
-      httpOnly: true,
-      sameSite: 'lax',
-      secure: url.protocol === 'https:',
-      maxAge: 2592000
-    });
+  let membership = getSelectedMembership(cookies, memberships);
+  if (!membership && memberships.length === 1) {
+    membership = memberships[0]!;
+    setSelectedOrganization(cookies, membership.organization_id, url.protocol === 'https:');
   }
-  return { membership: active ?? data[0], memberships: data };
+  if (!membership && url.pathname !== '/app/select-organization') redirect(303, '/app/select-organization');
+  return { membership, memberships };
 };

@@ -7,6 +7,10 @@ export default tseslint.config(
   eslint.configs.recommended,
   ...tseslint.configs.recommended,
   ...svelte.configs['flat/recommended'],
+  {
+    files: ['**/*.svelte'],
+    languageOptions: { parserOptions: { parser: tseslint.parser } }
+  },
   prettier,
   { ignores: ['.svelte-kit/**', 'build/**', 'src/lib/types/database.generated.ts'] },
   {

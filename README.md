@@ -1,28 +1,63 @@
 # BrainSwap
 
-**Hand off AI jobs when your model cannot finish them.** BrainSwap is an invite-only, organization-scoped coordination application for a small research lab. A requester packages a task; another authorized member manually uses an AI service they control and returns an immutable result. BrainSwap performs no inference and accepts no provider credentials.
+BrainSwap is a private, invitation-only task-handoff application for a small research lab. A requester packages the next step of a task, an authorized member manually uses an AI service they control, and the requester reviews the returned result. BrainSwap does not run model inference, accept model-provider credentials, automate consumer model websites, scrape conversations, or pool quotas.
+
+## Review status
+
+**Current recommendation: `BLOCK PILOT`.** The final local pass completed: formatting, Svelte/type checks, lint, 14 unit tests, the heuristic scan, the Cloudflare production build, a fresh database reset, SQL lint, generated database types, and all 207 pgTAP assertions passed. The reset applied both migrations and updated the private `job-files` bucket. A limited signed-out localhost preview also passed at desktop/mobile widths and redirected `/app` to login. Hosted Google OAuth, authenticated browser workflows, real Storage API behavior, hosted RLS/configuration, and deployed headers remain manual verification items. Do not use real unpublished research data until the blocking items in [the audit report](docs/audit-report.md) are closed.
 
 ## Architecture
 
-SvelteKit renders on the server and deploys through the Cloudflare adapter. Supabase provides Google/PKCE Auth, PostgreSQL, and one private Storage bucket. `hooks.server.ts` refreshes cookie sessions and checks verified claims; protected layouts validate an active membership on every request. SQL RPCs implement state transitions, while RLS and reduced grants remain the final authorization boundary. Direct browser Storage uploads use server-reserved random paths.
+- SvelteKit SSR with strict TypeScript and `@sveltejs/adapter-cloudflare`
+- Cloudflare Pages deployment output in `.svelte-kit/cloudflare`
+- Supabase Google/PKCE Auth with cookie-based SSR sessions
+- Supabase PostgreSQL with RLS as the final authorization boundary
+- Narrow PostgreSQL RPCs for workflow and administrative mutations
+- One private Supabase Storage bucket, `job-files`
+- Vitest for application tests and pgTAP for database authorization tests
 
-## Layout
+Server requests use the caller's Supabase cookie session and publishable key. No service-role key is required by the application. Organization selection is an HTTP-only convenience cookie that must be matched to a current active membership on every protected operation.
 
-- `src/routes` — login/callback, protected dashboard, job workspace, profile/admin/notifications
-- `src/lib` — branding, validation, exports, display and authorization helpers
-- `supabase/migrations` — schema, constraints, RLS, Storage policies, atomic RPCs
-- `supabase/tests` — transactional pgTAP checks
-- `docs` — plan, threat model, pilot acceptance procedure
-- `MANUAL_SETUP.md` — local and cloud operator runbook
+## Repository layout
 
-## Local start
+- `src/routes` — authentication, protected application pages, jobs, profile, notifications, and administration
+- `src/lib` — validation, prompt/export helpers, Storage helpers, server membership selection, and the destination for database types generated from a live schema
+- `supabase/migrations` — schema, RLS, Storage policies, and RPCs
+- `supabase/tests` — pgTAP authorization and workflow tests
+- `supabase/bootstrap-admin.sql` — operator-reviewed initial organization/admin/model bootstrap
+- `docs` — implementation status, threat model, acceptance test, and audit report
+- `MANUAL_SETUP.md` — ten-step local and hosted setup runbook
 
-Copy `.env.example` to `.env`, install with `npm ci`, start Docker, run `npm run db:start && npm run db:reset`, then use the local Supabase values in `.env` and run `npm run dev`. Replace bootstrap placeholders before running `supabase/bootstrap-admin.sql`. See `MANUAL_SETUP.md`.
+## Local verification
 
-## Commands
+Use Node.js 24.15 or later in the Node 24 release line. If `nvm` is installed, `.nvmrc` selects the audited version; otherwise select a compatible Node 24 release with your version manager. Then run:
 
-`npm run check`, `npm run lint`, `npm test`, `npm run build`, `npm run security:check`, `npm run db:lint`, and `npm run test:db` cover application and database checks. `npm run db:types` regenerates database types.
+```sh
+nvm use # omit when using a different version manager
+cp .env.example .env # untracked, nonfunctional compile-time placeholders only
+npm ci
+npm run format:check
+npm run check
+npm run lint
+npm test
+npm run security:check
+npm run build
+```
 
-## Data/provider boundaries
+The example values are sufficient only for static application checks and a production build; they cannot authenticate or contact Supabase. Replace them with the local values reported by `supabase status` before starting the application. Never commit `.env`.
 
-Do not use BrainSwap for Restricted or Highly Restricted information, PHI, unnecessary PII, restricted human-subject/export-controlled records, credentials, or unauthorized material. Uploaded indicators are allowlisted but files are not malware-scanned. Prefer approved institutional storage for large, sensitive, collaborator-provided, or long-lived material. A lab must approve its data-use boundary before real research enters a pilot. See `SECURITY.md`.
+Database commands additionally require Docker and the local Supabase CLI stack:
+
+```sh
+npm run db:start
+npm run db:reset
+npm run db:lint
+npm run test:db
+npm run db:types
+```
+
+See [MANUAL_SETUP.md](MANUAL_SETUP.md) before attempting local OAuth or any hosted setup. Passing local application/database checks does not substitute for hosted authentication, Storage, or authenticated browser acceptance testing.
+
+## Data boundary
+
+Do not enter Restricted or Highly Restricted information, PHI, unnecessary PII, credentials, restricted human-subject or export-controlled records, personnel/student records, or material the lab is not authorized to disclose. Files are allowlisted by declared extension and MIME type but are not malware-scanned or content-inspected. BrainSwap is coordination software, not a canonical research-data repository. The lab must approve its data-use, retention, backup, incident-response, and AI-provider boundaries before any real pilot.

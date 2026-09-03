@@ -21,14 +21,7 @@
 <nav class="tabs" aria-label="Job lists">
   {#each tabs as t}<a class:active={data.tab === t[0]} href={'/app?tab=' + t[0]}>{t[1]}</a>{/each}
 </nav>
-<form class="filters">
-  <label>Model<select name="model"><option>All models</option></select></label><label
-    >Effort<select name="effort"
-      ><option>Any effort</option><option>Quick</option><option>Medium</option><option>Heavy</option></select
-    ></label
-  ><label>Status<select name="status"><option>Any status</option></select></label>
-</form>
-{#if data.error}<p class="error">Could not load jobs.</p>{:else if !data.jobs.length}<section class="empty">
+{#if data.loadFailed}<p class="error">Could not load jobs.</p>{:else if !data.jobs.length}<section class="empty">
     <h2>Nothing here yet</h2>
     <p>Post a task you cannot continue, or check another tab.</p>
   </section>{:else}<div class="cards">
