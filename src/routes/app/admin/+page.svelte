@@ -1,17 +1,19 @@
 <script lang="ts">
+  import { approvalEmailHref } from '$lib/ui';
+
   let { data, form } = $props();
 </script>
 
 <h1>Administration</h1>
 <p class="notice">
-  Invitations match an exact Google account email. Adding one grants eligibility but does not send an email. The last
-  active administrator cannot be demoted or deactivated.
+  Invitations must match the person's Google account email. Adding one grants eligibility but does not send an email
+  automatically. The last active administrator cannot be demoted or deactivated.
 </p>
 {#if form?.message}<p>{form.message}</p>{/if}
 {#if data.notice}<p class="notice">{data.notice}</p>{/if}
 <form method="POST" action="?/invite" class="panel">
   <h2>Add invitation</h2>
-  <label>Exact email<input type="email" name="email" required /></label><label
+  <label>Email<input type="email" name="email" required /></label><label
     >Role<select name="role"><option value="member">Member</option><option value="admin">Administrator</option></select
     ></label
   ><button>Add invitation</button>
@@ -33,6 +35,15 @@
           <label><input type="checkbox" name="active" value="yes" checked={m.active} /> Active</label>
           <button>Save membership</button>
         </form>
+        {#if !m.claimed}
+          <p>
+            <a
+              class="button secondary"
+              href={approvalEmailHref(m.invited_email)}
+              aria-label={`Email access approval to ${m.invited_email}`}>Email approval</a
+            >
+          </p>
+        {/if}
       </article>{/each}
   </div>
 </section>
