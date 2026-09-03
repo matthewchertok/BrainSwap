@@ -33,6 +33,7 @@ import {
   controls,
   dateTimeLocalToIso,
   isoToDateTimeLocal,
+  membershipHeading,
   safeNotification,
   statusLabel
 } from './ui';
@@ -202,6 +203,10 @@ describe('display and decisions', () => {
     expect(statusLabel('revision_requested')).toBe('Revision requested');
     expect(controls('requester', 'submitted').accept).toBe(true);
     expect(controls('member', 'submitted').accept).toBe(false);
+  });
+  it('uses the invited email when a member has no display name', () => {
+    expect(membershipHeading(null, 'claimed@example.com')).toBe('claimed@example.com');
+    expect(membershipHeading('Member Name', 'claimed@example.com')).toBe('Member Name');
   });
   it('keeps notifications metadata-sized', () =>
     expect(safeNotification('job_claimed', 'x'.repeat(500)).message.length).toBeLessThan(150));
@@ -483,6 +488,7 @@ describe('UI feedback contracts', () => {
 
   it('uses the fixed profile catalog and removes capabilities and admin model management', () => {
     const profile = readFileSync(new URL('../routes/app/profile/+page.svelte', import.meta.url), 'utf8');
+    const profileServer = readFileSync(new URL('../routes/app/profile/+page.server.ts', import.meta.url), 'utf8');
     const admin = readFileSync(new URL('../routes/app/admin/+page.svelte', import.meta.url), 'utf8');
     expect(PROFILE_MODELS).toEqual([
       'GPT-6 Astra',
@@ -496,7 +502,11 @@ describe('UI feedback contracts', () => {
     ]);
     expect(profile).toContain('<h2>Profile photo</h2>');
     expect(profile).toContain('{#if data.photo}<button');
+    expect(profile).toContain('action="?/upload_photo" enctype="multipart/form-data"');
     expect(profile).not.toContain('cleanupPhoto(data.photo.id, false)');
+    expect(profileServer).toContain('upload_photo: async');
+    expect(profileServer).toContain(".from('profile-photos')");
+    expect(profileServer).toContain('.upload(reservation.storage_path, photo');
     expect(profile).toContain('name="bio"');
     expect(profile).toContain('Organization<select disabled');
     expect(profile).not.toContain('name="capabilities"');

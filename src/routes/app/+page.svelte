@@ -40,12 +40,16 @@
       <h2>Nothing here yet</h2>
       <p>Post a task you cannot continue, or check another tab.</p>
     </section>{:else}<div class="cards">
-      {#each data.jobs as job}<article class="card">
+      {#each data.jobs as job}<a
+          class="card job-card-link"
+          href={'/app/jobs/' + job.id}
+          aria-label={`Open ${job.title?.trim() || 'untitled draft'}`}
+        >
           <div class="card-top">
             <JobStatus status={job.status} />
           </div>
-          <h2><a href={'/app/jobs/' + job.id}>{job.title}</a></h2>
-          <p>{job.listing_summary}</p>
+          <h2>{job.title?.trim() || 'Untitled draft'}</h2>
+          <p>{job.listing_summary?.trim() || 'No summary yet.'}</p>
           <dl>
             <div>
               <dt>Requester</dt>
@@ -56,6 +60,6 @@
               <dd>{job.preferred_model ?? '—'}</dd>
             </div>
           </dl>
-        </article>{/each}
+        </a>{/each}
     </div>{/if}
 </div>

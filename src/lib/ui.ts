@@ -53,6 +53,10 @@ export function approvalEmailHref(recipient: string) {
   return `mailto:${encodeURIComponent(recipient)}?subject=${subject}&body=${body}`;
 }
 
+export function membershipHeading(displayName: string | null, invitedEmail: string) {
+  return displayName?.trim() || invitedEmail;
+}
+
 export function dateTimeLocalToIso(value: string) {
   if (!/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/.test(value)) return '';
   const instant = new Date(value);
