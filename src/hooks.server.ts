@@ -1,5 +1,6 @@
 import { createServerClient } from '@supabase/ssr';
 import { env } from '$env/dynamic/public';
+import { applyBaselineSecurityHeaders } from '$lib/server/security-headers';
 import type { Handle } from '@sveltejs/kit';
 export const handle: Handle = async ({ event, resolve }) => {
   const supabaseUrl = env.PUBLIC_SUPABASE_URL;
@@ -30,10 +31,7 @@ export const handle: Handle = async ({ event, resolve }) => {
   const response = await resolve(event, {
     filterSerializedResponseHeaders: (n) => n === 'content-range' || n === 'x-supabase-api-version'
   });
-  response.headers.set('X-Content-Type-Options', 'nosniff');
-  response.headers.set('Referrer-Policy', 'no-referrer');
-  response.headers.set('Permissions-Policy', 'camera=(), microphone=(), geolocation=()');
-  response.headers.set('X-Frame-Options', 'DENY');
+  applyBaselineSecurityHeaders(response.headers);
   if (
     event.url.pathname.startsWith('/app') ||
     event.url.pathname.startsWith('/auth') ||
