@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { contextMarkdown, followUpSnapshot, runnablePrompt } from './prompt';
 import { parseJobForm } from './server/job-form';
 import { getSelectedMembership, type ActiveMembership } from './server/membership';
+import { applyBaselineSecurityHeaders } from './server/security-headers';
 import {
   allowedFiles,
   safeFilename,
@@ -167,5 +168,16 @@ describe('organization selection', () => {
   it('accepts only a live membership organization', () => {
     expect(getSelectedMembership({ get: () => memberships[1]!.organization_id }, memberships)).toEqual(memberships[1]);
     expect(getSelectedMembership({ get: () => '33333333-3333-4333-8333-333333333333' }, memberships)).toBeNull();
+  });
+});
+
+describe('security headers', () => {
+  it('preserves CSRF-compatible same-origin forms without leaking referrers off-site', () => {
+    const headers = new Headers();
+    applyBaselineSecurityHeaders(headers);
+    expect(headers.get('Referrer-Policy')).toBe('same-origin');
+    expect(headers.get('X-Content-Type-Options')).toBe('nosniff');
+    expect(headers.get('X-Frame-Options')).toBe('DENY');
+    expect(headers.get('Permissions-Policy')).toBe('camera=(), microphone=(), geolocation=()');
   });
 });
