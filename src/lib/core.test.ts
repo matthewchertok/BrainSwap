@@ -22,7 +22,7 @@ import {
   jobSchema,
   submissionSchema
 } from './validation';
-import { claimExpired, controls, safeNotification, statusLabel } from './ui';
+import { approvalEmailHref, claimExpired, controls, safeNotification, statusLabel } from './ui';
 describe('handoff exports', () => {
   const job = { current_task: 'Continue analysis', success_criteria: 'A checked answer', output_format: 'Plain text' };
   it('generates bounded runnable prompt', () => {
@@ -284,6 +284,24 @@ describe('access request email', () => {
   });
 });
 
+describe('approval email link', () => {
+  it('prefills a bounded plain-text approval message without sending it', () => {
+    const href = approvalEmailHref('person@example.com');
+    const [recipient, query] = href.slice('mailto:'.length).split('?', 2);
+    const params = new URLSearchParams(query);
+
+    expect(decodeURIComponent(recipient)).toBe('person@example.com');
+    expect(params.get('subject')).toBe('BrainSwap access approved');
+    expect(params.get('body')).toBe('Hello,\n\nYour BrainSwap access request has been approved.');
+  });
+
+  it('encodes recipient delimiters instead of creating extra mail fields', () => {
+    const href = approvalEmailHref('person@example.com?bcc=attacker@example.com');
+    expect(href).toContain('person%40example.com%3Fbcc%3Dattacker%40example.com?subject=');
+    expect(href.match(/\?/g)).toHaveLength(1);
+  });
+});
+
 describe('UI feedback contracts', () => {
   it('keeps dashboard tab navigation visibly and accessibly pending', () => {
     const dashboard = readFileSync(new URL('../routes/app/+page.svelte', import.meta.url), 'utf8');
@@ -300,5 +318,13 @@ describe('UI feedback contracts', () => {
     expect(login).toContain('Do not submit anything sensitive');
     expect(styles).toContain('--accent: #e77500;');
     expect(styles).not.toContain('--green:');
+  });
+
+  it('uses a human email label and offers a manual approval message for unclaimed invitations', () => {
+    const admin = readFileSync(new URL('../routes/app/admin/+page.svelte', import.meta.url), 'utf8');
+    expect(admin).toContain('<label>Email<input type="email" name="email" required /></label>');
+    expect(admin).not.toContain('<label>Exact email');
+    expect(admin).toContain('href={approvalEmailHref(m.invited_email)}');
+    expect(admin).toContain('>Email approval</a');
   });
 });

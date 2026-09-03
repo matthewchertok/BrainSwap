@@ -19,7 +19,7 @@ BrainSwap is a private, invitation-only task-handoff application for a small res
 
 Server requests use the caller's Supabase cookie session and publishable key. No service-role key is required by the application. Organization selection is an HTTP-only convenience cookie that must be matched to a current active membership on every protected operation.
 
-Adding an exact-email invitation in the admin screen changes eligibility but does not send an invitation email. An uninvited person may instead choose **Request access**, verify their address through Google, and have BrainSwap send that one address to the configured operator. The operator still decides whether to add an invitation; the request never creates a membership.
+Adding an exact-email invitation in the admin screen changes eligibility but does not send an invitation email automatically. Each unclaimed invitation includes an **Email approval** link that opens the administrator's mail application with a short approval message addressed to that person. An uninvited person may instead choose **Request access**, verify their address through Google, and have BrainSwap send that one address to the configured operator. The operator still decides whether to add an invitation; the request never creates a membership.
 
 ## Repository layout
 

@@ -233,7 +233,7 @@ After Cloudflare assigns the `workers.dev` hostname, return to step 8 and set th
 
 ## 10. Invite pilot users and complete synthetic acceptance
 
-Sign in as the exact bootstrap admin. In `/app/admin`, add exact invitation emails for at least a requester, two competing helpers, and a separate cross-organization test account/organization. Adding an invitation grants eligibility but does not send an invitation or approval email. Verify each membership, role, and organization before proceeding.
+Sign in as the exact bootstrap admin. In `/app/admin`, add exact invitation emails for at least a requester, two competing helpers, and a separate cross-organization test account/organization. Adding an invitation grants eligibility but does not send an email automatically. For an unclaimed invitation, **Email approval** opens the administrator's mail application with a short approval message addressed to that person; the administrator must review and send it. Verify each membership, role, and organization before proceeding.
 
 Before inviting one synthetic account, use **Request access** with that account. Confirm the operator receives exactly the one-line request, the requester remains unable to open `/app`, and a repeat request within 24 hours produces no duplicate email. Then review the exact address and add it manually in `/app/admin`.
 

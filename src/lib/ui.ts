@@ -18,3 +18,11 @@ export function controls(role: 'requester' | 'helper' | 'admin' | 'member', stat
 export function safeNotification(type: string, title: string) {
   return { type, message: `${type.replaceAll('_', ' ')}: ${title.slice(0, 120)}` };
 }
+
+export function approvalEmailHref(recipient: string) {
+  const query = new URLSearchParams({
+    subject: 'BrainSwap access approved',
+    body: 'Hello,\n\nYour BrainSwap access request has been approved.'
+  });
+  return `mailto:${encodeURIComponent(recipient)}?${query.toString()}`;
+}
