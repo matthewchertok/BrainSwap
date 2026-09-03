@@ -9,7 +9,7 @@ BrainSwap is a private, invitation-only task-handoff application for a small res
 ## Architecture
 
 - SvelteKit SSR with strict TypeScript and `@sveltejs/adapter-cloudflare`
-- Cloudflare Pages deployment output in `.svelte-kit/cloudflare`
+- Cloudflare Workers deployment through Workers Builds, with the generated worker in `.svelte-kit/cloudflare`
 - Supabase Google/PKCE Auth with cookie-based SSR sessions
 - Supabase PostgreSQL with RLS as the final authorization boundary
 - Narrow PostgreSQL RPCs for workflow and administrative mutations
@@ -42,6 +42,7 @@ npm run lint
 npm test
 npm run security:check
 npm run build
+npm run deploy:check
 ```
 
 The example values are sufficient only for static application checks and a production build; they cannot authenticate or contact Supabase. Replace them with the local values reported by `supabase status` before starting the application. Never commit `.env`.

@@ -30,7 +30,7 @@ The audit assumed a hostile authenticated browser capable of directly calling Su
 ## Architecture reviewed
 
 - SvelteKit SSR and strict TypeScript
-- `@sveltejs/adapter-cloudflare` and Cloudflare Pages output
+- `@sveltejs/adapter-cloudflare`, Cloudflare Workers Builds configuration, and generated Worker output
 - Supabase Google OAuth/PKCE and cookie sessions
 - Supabase PostgreSQL and RLS
 - public workflow/admin RPCs with internal `private` helpers
@@ -181,8 +181,9 @@ The initial UI displayed model/effort/status filters without applying them. Thos
 - The checked-in local configuration intentionally remains DB-only unless an operator deliberately enables Google. For local OAuth, Google's authorized redirect URI is the local Supabase Auth provider callback (`http://127.0.0.1:54321/auth/v1/callback`); the application callback (`http://localhost:5173/auth/callback`) belongs in Supabase's redirect allowlist, not Google's.
 - The additive migration validates stronger constraints immediately. A populated v0.1 database may contain rows that need operator-reviewed remediation beyond the included deterministic backfills, so a production upgrade requires a dry run and constraint report on a disposable clone before hosted application.
 - Generated database types and their output directory were initially missing; local generation now succeeds and the generated file is present.
-- Hosted Supabase migrations, bucket configuration, RLS grants, OAuth redirects, and Cloudflare environment variables were not verified.
+- The isolated hosted Supabase project now has the clean migrations, private bucket configuration, bootstrap data, and Google provider configuration applied. Direct hosted hostile-client RLS/Storage checks, the final application redirect after Worker creation, and authenticated browser behavior remain unverified.
 - Authenticated browser/OAuth smoke testing and a real Cloudflare deploy-preview test were unavailable without configured Supabase/OAuth services. The final local signed-out production-preview check covered login rendering/hydration, protected-route redirection, response headers, and desktop/mobile widths only.
+- The first hosted Workers Builds attempt compiled successfully but stalled when `wrangler deploy` tried to auto-configure SvelteKit through an interactive `sv add` process. The repository now contains a pinned Wrangler dependency, an explicit Worker/assets configuration, an assets ignore list, and a non-mutating deployment dry-run check so hosted deployment does not depend on framework auto-configuration.
 
 ## Documentation defects
 
@@ -209,7 +210,8 @@ The following corrections are visible in the repository. “Visible” does not 
 - removed unused direct `jsdom` and redundant direct TypeScript-ESLint packages;
 - fixed database-type output directory;
 - least-privilege/time-bounded CI;
-- broader heuristic source/config scan; and
+- broader heuristic source/config scan;
+- explicit, non-interactive Cloudflare Workers configuration plus a CI deployment dry run; and
 - corrected documentation and operator runbook.
 
 ### Database fixes represented by the additive migration
@@ -249,6 +251,7 @@ Application-only checks used Node 24.19.0 (within the required Node 24.15+ relea
 | `npm test`                                       | PASS                         | Vitest reported 1 file and 14 tests passed                                                                                                                  |
 | `npm run security:check`                         | PASS                         | Heuristic scan passed; this is not proof of security                                                                                                        |
 | `npm run build`                                  | PASS                         | A final sequential Cloudflare-adapter build completed and produced `.svelte-kit/cloudflare`                                                                 |
+| `npm run deploy:check`                           | PASS                         | Wrangler 4.86.0 parsed the explicit Worker/assets configuration and completed a non-mutating upload dry run without auto-configuration or runtime warnings  |
 | `npm run db:types`                               | PASS                         | Generated `src/lib/types/database.generated.ts` from the clean local schema                                                                                 |
 | `npm run db:start`                               | PASS                         | Docker-backed local Supabase started successfully; Studio was available at `http://127.0.0.1:54323`                                                         |
 | `npm run db:reset`                               | PASS                         | Applied `202609030001_initial.sql` and `202609030002_security_hardening.sql`; the private bucket update completed                                           |
@@ -261,7 +264,7 @@ Application-only checks used Node 24.19.0 (within the required Node 24.15+ relea
 | Signed-out local browser/header smoke            | PASS, LIMITED                | Login hydrated with no console errors at 1280x800 and 390x844; mobile had no horizontal overflow; `/app` returned 303 to `/login?next=%2Fapp`               |
 | Local sensitive-page headers                     | PASS, LIMITED                | Login had generated CSP, `no-store, private`, nosniff, no-referrer, Permissions Policy, and frame denial; HSTS and real Cloudflare behavior need HTTPS test |
 | `git diff --check`                               | PASS                         | Final diff has no whitespace errors                                                                                                                         |
-| Hosted OAuth/Storage/authenticated browser tests | NOT RUN                      | No cloud credentials or deployment; release blocker                                                                                                         |
+| Hosted OAuth/Storage/authenticated browser tests | NOT RUN                      | Hosted configuration is in progress, but no successful Worker deployment or authenticated synthetic acceptance run exists yet; release blocker              |
 
 ## Residual risks
 
@@ -281,12 +284,14 @@ Application-only checks used Node 24.19.0 (within the required Node 24.15+ relea
 
 ## Items requiring manual cloud verification
 
+An isolated Supabase project, clean migrations, private bucket configuration, bootstrap data, and Google-provider configuration were applied on 2026-09-03. Those setup actions do not replace the hostile-client and browser acceptance evidence below; the items remain open until their behavior is tested and recorded.
+
 1. Create an isolated Supabase project. Apply the migrations to a clean database, then dry-run the v0.1-to-hardened upgrade against a disposable copy of any populated v0.1 data; inventory and explicitly remediate every constraint-invalid row before a hosted upgrade.
 2. Seed/inspect `job-files` privacy, size/MIME limits, reservation metadata binding, pending-quota accounting, operation-aware list denial, and the Storage operation helper/version precondition.
 3. Inspect RLS and grants for every table/function on the hosted project.
 4. Bootstrap a synthetic organization/admin with no placeholders and verify idempotency.
 5. Configure Google consent/test users and use the Supabase Auth provider callback shown by Supabase as Google's authorized redirect URI. For local testing that is `http://127.0.0.1:54321/auth/v1/callback`; keep `http://localhost:5173/auth/callback` in Supabase's application redirect allowlist only. Disable every Auth provider and identity-linking path outside the approved Google flow.
-6. Create Cloudflare Pages with `npm run build`, `.svelte-kit/cloudflare`, Node 24.15+, and only public Supabase values plus any reviewed server-only webhook.
+6. Create a Cloudflare Worker through Workers Builds with `npm run build`, `npx wrangler deploy`, root path `/`, Node 24.15+, and only the public Supabase values plus any reviewed server-only webhook. Add the public values as both build variables and Worker runtime text variables.
 7. Test invited/uninvited/deactivated/multi-org login, sign-out, and open-redirect cases.
 8. Execute the full actor matrix and direct hostile RPC/REST/Storage calls, including real concurrent claim and deactivation/revision-reassignment transactions.
 9. Exercise both job/result file lifecycles, verify bucket listing is denied, attempt mismatched size/MIME uploads, force tracked and untracked exact-prefix cleanup retries, and test expiry/deactivation.
