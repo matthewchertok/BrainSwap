@@ -8,13 +8,13 @@ BrainSwap coordinates manual AI task handoffs inside one or more private researc
 
 ## Assets
 
-- invitation email addresses, membership bindings, roles, and active status;
+- invitation and access-request email addresses, membership bindings, roles, and active status;
 - lab-visible job listings;
 - protected task payloads, sensitivity notes, context, external links, and prompts;
 - model responses, revision instructions, submission history, and follow-up snapshots;
 - uploaded job/result files and Storage object paths;
 - notification and audit metadata;
-- Supabase Auth cookies/tokens, OAuth codes, provider configuration, and deployment secrets.
+- Supabase Auth cookies/tokens, OAuth codes, provider configuration, Resend API key, and deployment secrets.
 
 ## Actors and adversaries
 
@@ -33,7 +33,7 @@ BrainSwap coordinates manual AI task handoffs inside one or more private researc
 
 ## Trust boundaries
 
-The browser is hostile. Supabase Auth establishes identity, while PostgreSQL/RLS and narrowly granted RPCs establish authorization. Supabase Storage enforces a second object boundary tied to database reservations. A Cloudflare Worker executes SSR code and serves responses. Google, Supabase, Cloudflare, manually selected AI providers, webhook operators, and institutional file stores are external processors/trust boundaries.
+The browser is hostile. Supabase Auth establishes identity, while PostgreSQL/RLS and narrowly granted RPCs establish authorization. Supabase Storage enforces a second object boundary tied to database reservations. A Cloudflare Worker executes SSR code and serves responses. Google, Supabase, Cloudflare, Resend, manually selected AI providers, webhook operators, and institutional file stores are external processors/trust boundaries. Resend receives only the configured operator address and one normalized, Google-verified requester address in a fixed plain-text sentence.
 
 No browser value—including organization, membership, actor, role, model, job, submission, or object path—is authoritative. No service-role key belongs in the application.
 
@@ -44,6 +44,7 @@ No browser value—including organization, membership, actor, role, model, job, 
 | Authenticated outsider exploits a privileged RPC | Re-derive actor; reject NULL actor explicitly; scope organization; narrow EXECUTE               | Hardening applied; clean local pgTAP regression passed; hosted hostile-client test required |
 | Invitation theft or rebinding                    | Exact confirmed Auth email; immutable claim owner; no domain inference                          | Clean local adversarial pgTAP passed; hosted Auth acceptance required                       |
 | Unintended Auth provider creates identities      | Google-only provider configuration; anonymous/manual linking/direct email signup disabled       | Local config inspection; hosted provider test required                                      |
+| Forged or abusive access-request email           | Primary verified Google identity; fixed body; no membership mutation; hashed idempotency key    | Unit coverage present; hosted delivery/duplicate/log test required                          |
 | Forged organization cookie/ID                    | Resolve cookie against live memberships on every route/action; RPC revalidates organization     | Application hardening present; end-to-end multi-org test required                           |
 | Cross-organization object references             | Composite same-organization foreign keys plus RLS/RPC checks                                    | Clean migration and local actor-matrix pgTAP passed; hosted inspection required             |
 | Sealed metadata/payload disclosure               | Separate listing projection; explicit payload predicate; narrow workspace JSON projection       | Local actor-matrix pgTAP passed; authenticated browser/Storage tests required               |
@@ -64,6 +65,7 @@ Storage object names are not secrets or authority. BrainSwap does not need bucke
 
 - anonymous, uninvited, deactivated, cross-organization, and unrelated members call every public RPC directly;
 - an outsider supplies a victim organization and their own invitation email;
+- an outsider forges an access-request address, repeats one request, or uses many Google accounts to generate mail;
 - a browser submits another membership, model, job, submission, or object UUID;
 - two helpers claim concurrently and the loser attempts payload/file access;
 - a claim expires between page load, file upload, and submit;
@@ -75,4 +77,4 @@ Storage object names are not secrets or authority. BrainSwap does not need bucke
 
 ## Residual and external risks
 
-Files are not malware-scanned and declared MIME types can lie. Administrators can access organization content. A compromised authorized account can exercise its legitimate rights. Manual AI-provider use, provider retention/training, scientific validity, collaborator authorization, backups, data residency, incident handling, and institutional policy remain operator responsibilities. Hosted configuration can diverge from migrations. None of these controls make the system absolutely secure.
+Files are not malware-scanned and declared MIME types can lie. Administrators can access organization content. A compromised authorized account can exercise its legitimate rights. Resend retains transactional-email records under its own policies, and per-address idempotency does not stop abuse distributed across many Google accounts. Manual AI-provider use, provider retention/training, scientific validity, collaborator authorization, backups, data residency, incident handling, and institutional policy remain operator responsibilities. Hosted configuration can diverge from migrations. None of these controls make the system absolutely secure.
