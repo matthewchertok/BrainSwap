@@ -5,26 +5,37 @@ import type { Actions } from './$types';
 export const load = async ({ locals, parent, url }) => {
   const { membership } = await parent();
   if (!membership) error(409, 'Select an organization first.');
-  const [modelsResult, selectedResult, profileResult] = await Promise.all([
+  const [modelsResult, selectedResult, profileResult, photoResult] = await Promise.all([
     locals.supabase
       .from('models')
       .select('id,display_name')
       .eq('organization_id', membership.organization_id)
-      .eq('active', true),
+      .eq('active', true)
+      .order('sort_order'),
     locals.supabase.from('member_models').select('model_id').eq('membership_id', membership.membership_id),
     locals.supabase
       .from('memberships')
-      .select('display_name,capabilities,notification_preferences')
+      .select('display_name,bio,notification_preferences')
       .eq('id', membership.membership_id)
+      .eq('organization_id', membership.organization_id)
+      .maybeSingle(),
+    locals.supabase
+      .from('profile_photos')
+      .select('id,mime_type,size_bytes,upload_status,cleanup_started_at')
+      .eq('membership_id', membership.membership_id)
       .eq('organization_id', membership.organization_id)
       .maybeSingle()
   ]);
-  if (modelsResult.error || selectedResult.error || profileResult.error || !profileResult.data)
+  if (modelsResult.error || selectedResult.error || profileResult.error || photoResult.error || !profileResult.data)
     error(503, 'Profile data is temporarily unavailable.');
   return {
     models: modelsResult.data ?? [],
     selected: (selectedResult.data ?? []).map((item) => item.model_id),
     profile: profileResult.data,
+    photo: photoResult.data,
+    membershipId: membership.membership_id,
+    organizationId: membership.organization_id,
+    organizationName: membership.organization_name,
     notice: url.searchParams.has('saved') ? 'Profile saved.' : null
   };
 };
@@ -34,7 +45,7 @@ export const actions: Actions = {
     const f = await request.formData();
     const parsed = profileSchema.safeParse({
       display_name: f.get('display_name'),
-      capabilities: f.getAll('capabilities'),
+      bio: f.get('bio') ?? '',
       model_ids: f.getAll('model_ids'),
       notify: f.get('notify') === 'yes'
     });
@@ -42,7 +53,7 @@ export const actions: Actions = {
     const { error: updateError } = await locals.supabase.rpc('update_profile', {
       p_organization_id: membership.organization_id,
       p_display_name: parsed.data.display_name,
-      p_capabilities: parsed.data.capabilities,
+      p_bio: parsed.data.bio,
       p_model_ids: parsed.data.model_ids,
       p_preferences: { new_matching_jobs: parsed.data.notify }
     });

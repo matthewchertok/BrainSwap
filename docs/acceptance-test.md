@@ -48,6 +48,7 @@ npm run lint
 npm test
 npm run security:check
 npm run build
+npm run deploy:check
 git diff --check
 ```
 
@@ -88,15 +89,17 @@ Record exact command output and test counts. Any skipped database gate is `NOT R
 6. As Org A admin, attempt to update an Org B membership. Expect failure.
 7. Attempt to deactivate/demote the last active Org A administrator. Expect rejection. Add a second admin, then confirm an allowed demotion/deactivation succeeds without rebinding its Auth owner.
 8. Confirm ordinary members cannot select raw invitation emails, role-management fields, or administrator audit records.
+9. As an Org A administrator, remove an unclaimed invitation and confirm it disappears. Repeat as an ordinary member, with a claimed membership, and with an Org B membership identifier; all three attempts must fail without deleting a row.
 
 ## 4. Draft, listing, and sealed-content visibility
 
-1. As requester, create a `claimed_only` draft containing unique canary strings in the task, success criteria, output format, sensitivity notes, context, URL, and filename.
-2. Before publication, query the job/workspace as requester, admin, unrelated member, Org B member, and uninvited account. Only requester/admin may see the draft.
-3. Publish it. An unrelated active Org A member may see only intended listing fields such as title, listing summary, status, effort, model/tools, and requester display name.
-4. Search the unrelated member's HTML, serialized page data, RPC JSON, notifications, and Storage responses for every canary. None may appear.
-5. Specifically verify that `sensitivity_notes`, organization/internal membership IDs, protected contexts, exact Storage paths, result text, and revision instructions are absent before authorization.
-6. For a separate `lab` job, verify the task/context visibility explicitly chosen by the product, while results and revision instructions remain limited to intended participants.
+1. As requester, save a completely blank draft. Then add only one field and save again. Both partial drafts must remain drafts; publication must reject them as incomplete.
+2. Complete the draft with unique canary strings in its title, task summary, prompt, shared-chat URL, free-form model preferences, required tools, and filename.
+3. Before publication, query the job/workspace as requester, admin, unrelated member, Org B member, and uninvited account. Only requester/admin may see the draft.
+4. Publish it. An unrelated active Org A member may see only intended listing fields: title, task summary, status, free-form preferred model, required tools, requester display name, and deadline.
+5. Search the unrelated member's HTML, serialized page data, RPC JSON, notifications, and Storage responses for prompt, chat-link, and filename canaries. None may appear.
+6. Specifically verify that organization/internal membership IDs, protected chat context, exact Storage paths, result text, and revision instructions are absent before authorization.
+7. Confirm there is no visibility control: every published job remains sealed until an authorized claim, while requester/admin access remains available.
 
 ## 5. Claim concurrency, expiry, and deactivation
 
@@ -110,14 +113,15 @@ Record exact command output and test counts. Any skipped database gate is `NOT R
 
 ## 6. Submission, revision, acceptance, cancellation, and reopening
 
-1. Current claimant creates a result with a unique model name, response, notes, and tools. An unrelated/helper loser/requester must not submit on the claimant's behalf.
-2. Submit revision 1. Confirm it becomes immutable, receives a unique positive revision number, and the job leaves the claimed state with claim fields cleared as documented.
-3. Attempt direct UPDATE/DELETE of the submitted row. Expect denial.
-4. Requester requests revision with nonblank bounded instructions. Unrelated members, the helper, and cross-org users must fail.
-5. Verify only intended principals can read revision instructions. Submit revision 2 and confirm revision 1 is retained unchanged.
-6. Requester accepts the latest submission. Confirm `accepted_submission_id` references a finalized submission and accepted work rejects further claim, submit, revision, cancellation, or reopen transitions unless the documented product explicitly permits one.
-7. On separate jobs, test cancellation and each permitted reopen source state. Confirm impossible/out-of-order transitions fail at the RPC/database boundary.
-8. Confirm cancellation and reopening clear assignment/expiry fields consistently.
+1. Current claimant creates a result with a unique model name, response, reasoning-effort choice, optional notes, and result file. An unrelated member, losing helper, requester, and cross-organization member must not submit on the claimant's behalf.
+2. Submit revision 1. Confirm it receives a unique positive revision number, the job leaves the claimed state with claim fields cleared, and the job still appears in the submitter's **Claimed by me** tab with a submitted status.
+3. Before the requester acts, edit the text/metadata and add or remove a result file as the submitter. Confirm the existing submission row and revision number are updated in place rather than creating another submission. Direct edits by every other actor must fail.
+4. Attempt direct table UPDATE/DELETE of the submitted row. Expect denial; only the narrow edit RPC may make the pre-response correction.
+5. Have the requester make the first workflow response by requesting a revision. Confirm the prior submission becomes edit-locked atomically and every later correction/file-upload attempt fails. Unrelated members, the helper, and cross-org users must not request a revision.
+6. Verify only intended principals can read revision instructions. Submit revision 2 and confirm revision 1 is retained unchanged.
+7. On a separate submitted job, have the requester accept the result. Confirm `accepted_submission_id` references the finalized submission and the first response also locked result editing.
+8. On separate jobs, test cancellation and each permitted reopen source state. Confirm impossible/out-of-order transitions fail at the RPC/database boundary and cancelled jobs expose no protected data to unrelated members.
+9. Confirm cancellation and reopening clear assignment/expiry fields consistently and display the appropriate non-interactive status dot.
 
 ## 7. Job and result file lifecycle
 
@@ -132,6 +136,9 @@ For both a requester job file and claimant result file, test reservation -> uplo
 7. Expire/deactivate the claimant and repeat result-file download/finalize/delete attempts. Expect the same loss of authority as workspace access.
 8. Delete a disposable job through the application. Simulate partial Storage failure, retry, and confirm cleanup is idempotent. Database deletion must refuse while related Storage objects remain, then succeed after Storage API cleanup without orphaned objects/metadata.
 9. Confirm no normal application SQL directly deletes `storage.objects` metadata.
+10. Confirm both attachment cards populate a filename/description/status table immediately after a successful finalization and clearly surface pending cleanup/finalization work.
+
+For profile photos, repeat the same reservation principles with a JPEG, PNG, or WebP image no larger than 5 MiB. The owner may upload/replace/remove the exact reserved object; active members of the same organization may read a ready photo; unrelated and cross-organization actors may not upload or delete it; no bucket listing or raw local filename may be exposed.
 
 ## 8. Follow-up provenance
 
@@ -146,9 +153,10 @@ For both a requester job file and claimant result file, test reservation -> uplo
 1. Exercise publish, claim, submit, revision, accept, cancellation, expiry replacement, and administrative changes.
 2. Inspect notification text, webhook bodies, audit metadata, Cloudflare logs, and Supabase logs. They may contain safe identifiers/event types but no task/result/revision/file content, credentials, OAuth codes/tokens, sensitive URLs, access-request addresses, or email bodies. Resend's own transactional record necessarily contains the operator address and the one-line requester address; verify it contains nothing else.
 3. Confirm the requester is excluded from new-job notifications and inactive members are not treated as active recipients. The MVP does not claim capability/model matching.
-4. If a webhook is configured, force timeout/non-2xx/unreachable behavior. The already-committed core transition must remain successful and no secret may reach client JavaScript.
-5. Confirm there is no analytics or tracking request.
-6. Confirm the Resend key and recipient are absent from browser JavaScript, HTML, network requests, build output, and Git. Confirm the access-request email is plain text and has no tracking link or pixel.
+4. Confirm the profile preference produces an in-app new-job notification only. Organization-wide email delivery is intentionally deferred until a verified BrainSwap sending domain is configured and reviewed.
+5. If a webhook is configured, force timeout/non-2xx/unreachable behavior. The already-committed core transition must remain successful and no secret may reach client JavaScript.
+6. Confirm there is no analytics or tracking request.
+7. Confirm the Resend key and recipient are absent from browser JavaScript, HTML, network requests, build output, and Git. Confirm the access-request email is plain text and has no tracking link or pixel.
 
 ## 10. Headers, caching, accessibility, and responsive smoke tests
 
@@ -159,6 +167,8 @@ On the dashboard, change tabs over a throttled connection. The selected tab must
 Create and edit a draft with a deadline. Confirm the browser provides a native local date-and-time picker, the stored instant displays in local time when editing, and malformed, unzoned, missing-conversion, and past values still fail server-side validation.
 
 Confirm job status is non-interactive text with a visible dot: amber for **Open** and green for **Submitted**. Keyboard and pointer interaction must not suggest that the status is a button.
+
+Confirm the main canvas is white, the application header is `#121212`, and its navigation controls use solid `#e77500` with readable white text. Check button/card spacing at desktop and phone widths, including attachments, publish/delete controls, runnable-prompt controls, revision instructions, and notifications.
 
 For protected/auth responses verify:
 

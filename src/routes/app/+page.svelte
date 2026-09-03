@@ -20,7 +20,7 @@
 <div class="title-row">
   <div>
     <h1>Jobs</h1>
-    <p>Coordinate manual AI handoffs inside your lab.</p>
+    <p>Donate your compute to help others in need.</p>
   </div>
   <a class="button" href="/app/jobs/new">Post a job</a>
 </div>
@@ -42,7 +42,7 @@
     </section>{:else}<div class="cards">
       {#each data.jobs as job}<article class="card">
           <div class="card-top">
-            <JobStatus status={job.status} /><span>{job.visibility === 'claimed_only' ? 'Sealed' : 'Lab-visible'}</span>
+            <JobStatus status={job.status} />
           </div>
           <h2><a href={'/app/jobs/' + job.id}>{job.title}</a></h2>
           <p>{job.listing_summary}</p>
@@ -54,14 +54,6 @@
             <div>
               <dt>Model</dt>
               <dd>{job.preferred_model ?? '—'}</dd>
-            </div>
-            <div>
-              <dt>Effort</dt>
-              <dd>{job.effort}</dd>
-            </div>
-            <div>
-              <dt>Sensitivity</dt>
-              <dd>{job.sensitivity}</dd>
             </div>
           </dl>
         </article>{/each}

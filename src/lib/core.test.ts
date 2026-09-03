@@ -14,11 +14,16 @@ import { getSelectedMembership, type ActiveMembership } from './server/membershi
 import { applyBaselineSecurityHeaders } from './server/security-headers';
 import {
   allowedFiles,
+  jobDraftSchema,
+  jobPublishSchema,
+  PROFILE_MODELS,
+  REASONING_EFFORTS,
   safeFilename,
   safeReturnPath,
   totalFileSize,
   validExternalUrl,
   validFile,
+  validProfilePhoto,
   jobSchema,
   submissionSchema
 } from './validation';
@@ -35,31 +40,35 @@ import {
 function completeJobForm() {
   const form = new FormData();
   form.set('title', 'Task');
-  form.set('listing_summary', 'Summary');
-  form.set('current_task', '  Continue with indentation\n');
-  form.set('success_criteria', 'Checked result');
-  form.set('output_format', 'Text');
-  form.set('visibility', 'claimed_only');
-  form.set('sensitivity', 'general');
-  form.set('effort', 'quick');
-  form.set('preferred_model_id', '11111111-1111-4111-8111-111111111111');
-  form.set('prior_context', 'Previous result');
-  form.set('external_urls', 'https://drive.example/one\nhttps://drive.example/two');
-  form.set('acknowledged', 'yes');
+  form.set('task_summary', 'Summary');
+  form.set('prompt', '  Continue with indentation\n');
+  form.set('chat_url', 'https://chat.example/share/one');
+  form.set('preferred_model_text', 'GPT-6 Astra');
+  form.set('acceptable_models_text', 'Any frontier model');
   return form;
 }
 
 describe('handoff exports', () => {
-  const job = { current_task: 'Continue analysis', success_criteria: 'A checked answer', output_format: 'Plain text' };
+  const job = { prompt: 'Continue analysis and return a checked answer.' };
   it('generates bounded runnable prompt', () => {
     const p = runnablePrompt(
       job,
-      [{ label: 'Prior', text_content: 'state' }],
+      [{ label: 'Link to chat', url: 'https://chat.example/share/one' }],
       [{ original_filename: 'paper.pdf', description: 'read it' }]
     );
-    expect(p).toContain('CURRENT TASK\nContinue analysis');
-    expect(p).toContain('current task takes precedence');
+    expect(p).toContain('Study the full chat history');
+    expect(p).toContain('PROMPT\nContinue analysis');
     expect(p).toContain('paper.pdf: read it');
+  });
+  it('keeps legacy and follow-up context separate from the new prompt', () => {
+    const p = runnablePrompt(
+      { prompt: 'Run the next calculation.', legacy_current_task: 'Legacy exact task.' },
+      [{ kind: 'previous_job', label: 'Prior result', text_content: 'Earlier finalized answer.' }],
+      []
+    );
+    expect(p).toContain('LEGACY TASK DETAILS\nLegacy exact task.');
+    expect(p).toContain('PRIOR FINALIZED RESULT\nEarlier finalized answer.');
+    expect(p).toContain('PROMPT\nRun the next calculation.');
   });
   it('creates context markdown and safe snapshot', () => {
     expect(contextMarkdown(job, [], [])).toMatch(/^# BrainSwap handoff/);
@@ -97,6 +106,9 @@ describe('validation', () => {
     expect(validFile('.hidden.pdf', 'application/pdf', 12)).toBe(false);
     expect(validFile('x\u0000.pdf', 'application/pdf', 12)).toBe(false);
     expect(validFile('x.svg', 'image/svg+xml', 12)).toBe(false);
+    expect(validProfilePhoto('portrait.webp', 'image/webp', 12)).toBe(true);
+    expect(validProfilePhoto('paper.pdf', 'application/pdf', 12)).toBe(false);
+    expect(validProfilePhoto('portrait.png', 'image/png', 6 * 1024 * 1024)).toBe(false);
     expect(Object.keys(allowedFiles)).not.toContain('html');
   });
   it('caps aggregate sizes', () => expect(totalFileSize([{ size_bytes: 2 }, { size_bytes: 3 }])).toBe(5));
@@ -104,37 +116,51 @@ describe('validation', () => {
   it('rejects unzoned deadlines and unsafe context links', () => {
     const base = {
       title: 'Task',
-      listing_summary: 'Summary',
-      current_task: 'Continue',
-      success_criteria: 'Checked result',
-      output_format: 'Text',
-      visibility: 'claimed_only',
-      sensitivity: 'unpublished',
-      sensitivity_notes: '',
-      effort: 'medium',
-      preferred_model_id: '11111111-1111-4111-8111-111111111111',
-      acceptable_model_ids: [],
-      required_tools: [],
-      prior_context: '',
-      external_urls: [],
-      acknowledged: true
+      task_summary: 'Summary',
+      prompt: 'Continue',
+      chat_url: '',
+      preferred_model_text: 'GPT-6 Astra',
+      acceptable_models_text: 'Any frontier model',
+      required_tools: []
     };
     expect(jobSchema.safeParse({ ...base, deadline: '2099-09-30T17:00:00' }).success).toBe(false);
     expect(jobSchema.safeParse({ ...base, deadline: '2099-09-30T17:00:00-04:00' }).success).toBe(true);
     expect(
-      jobSchema.safeParse({ ...base, deadline: null, external_urls: ['https://user:secret@example.test/x'] }).success
+      jobSchema.safeParse({ ...base, deadline: null, chat_url: 'https://user:secret@example.test/x' }).success
     ).toBe(false);
+  });
+  it('allows incomplete drafts but requires complete published jobs', () => {
+    const empty = {
+      title: '',
+      task_summary: '',
+      prompt: '',
+      chat_url: '',
+      preferred_model_text: '',
+      acceptable_models_text: '',
+      required_tools: [],
+      deadline: null
+    };
+    expect(jobDraftSchema.safeParse(empty).success).toBe(true);
+    expect(jobPublishSchema.safeParse(empty).success).toBe(false);
+    expect(jobDraftSchema.safeParse({ ...empty, prompt: 'p'.repeat(100000) }).success).toBe(true);
+    expect(jobDraftSchema.safeParse({ ...empty, prompt: 'p'.repeat(100001) }).success).toBe(false);
   });
   it('parses form data without converting missing values to strings', () => {
     const form = completeJobForm();
     const parsed = parseJobForm(form);
     expect(parsed.success).toBe(true);
     if (parsed.success) {
-      expect(parsed.input.current_task).toBe('  Continue with indentation\n');
-      expect(parsed.input.contexts).toHaveLength(3);
+      expect(parsed.input.prompt).toBe('  Continue with indentation\n');
+      expect(parsed.input.chat_url).toBe('https://chat.example/share/one');
     }
     expect(
-      submissionSchema.safeParse({ model_used_text: null, response_text: null, notes: '', tools_used: [] }).success
+      submissionSchema.safeParse({
+        model_used_text: null,
+        response_text: null,
+        notes: '',
+        reasoning_effort: 'medium',
+        reasoning_effort_other: ''
+      }).success
     ).toBe(false);
   });
   it('validates model output without changing whitespace-significant content', () => {
@@ -143,12 +169,27 @@ describe('validation', () => {
       model_used_text: 'Test model',
       response_text: response,
       notes: '',
-      tools_used: []
+      reasoning_effort: 'high',
+      reasoning_effort_other: ''
     });
     expect(parsed.response_text).toBe(response);
     expect(
-      submissionSchema.safeParse({ model_used_text: 'Test model', response_text: '   \n', notes: '', tools_used: [] })
-        .success
+      submissionSchema.safeParse({
+        model_used_text: 'Test model',
+        response_text: '   \n',
+        notes: '',
+        reasoning_effort: 'high',
+        reasoning_effort_other: ''
+      }).success
+    ).toBe(false);
+    expect(
+      submissionSchema.safeParse({
+        model_used_text: 'Test model',
+        response_text: 'Done',
+        notes: '',
+        reasoning_effort: 'other',
+        reasoning_effort_other: ''
+      }).success
     ).toBe(false);
   });
 });
@@ -307,6 +348,7 @@ describe('approval email link', () => {
     expect(decodeURIComponent(recipient)).toBe('person@example.com');
     expect(params.get('subject')).toBe('BrainSwap access approved');
     expect(params.get('body')).toBe('Hello,\n\nYour BrainSwap access request has been approved.');
+    expect(href).not.toContain('+');
   });
 
   it('encodes recipient delimiters instead of creating extra mail fields', () => {
@@ -370,6 +412,7 @@ describe('UI feedback contracts', () => {
     expect(admin).not.toContain('<label>Exact email');
     expect(admin).toContain('href={approvalEmailHref(m.invited_email)}');
     expect(admin).toContain('>Email approval</a');
+    expect(admin).toContain('{#if m.active}<a');
   });
 
   it('uses native local date-time controls and non-interactive job status indicators', () => {
@@ -395,5 +438,90 @@ describe('UI feedback contracts', () => {
     const detailLoad = readFileSync(new URL('../routes/app/jobs/[id]/+page.server.ts', import.meta.url), 'utf8');
     expect(createAction).toContain('redirect(303, `/app/jobs/${id.data}?published=1`)');
     expect(detailLoad).toContain("if (params.has('published')) return 'Job published.';");
+  });
+
+  it('keeps the simplified job form and free-form model preferences', () => {
+    const newJob = readFileSync(new URL('../routes/app/jobs/new/+page.svelte', import.meta.url), 'utf8');
+    const detail = readFileSync(new URL('../routes/app/jobs/[id]/+page.svelte', import.meta.url), 'utf8');
+    const detailActions = readFileSync(new URL('../routes/app/jobs/[id]/+page.server.ts', import.meta.url), 'utf8');
+    expect(newJob).toContain('name="task_summary"');
+    expect(newJob).toContain('name="prompt"');
+    expect(newJob).toContain('name="chat_url"');
+    expect(newJob).toContain('name="preferred_model_text"');
+    expect(newJob).toContain('placeholder="GPT-6 Astra"');
+    expect(newJob).toContain('name="acceptable_models_text"');
+    expect(newJob).toContain('placeholder="Any frontier model"');
+    expect(newJob).toContain('name="intent" value="draft"');
+    expect(newJob).not.toContain('name="visibility"');
+    expect(newJob).not.toContain('name="sensitivity"');
+    expect(newJob).not.toContain('name="effort"');
+    expect(newJob).not.toContain('name="acknowledged"');
+    expect(newJob).not.toContain('name="output_format"');
+    expect(newJob).toContain('maxlength="100000"');
+    expect(detail).toContain('form="draft-editor" name="intent" value="publish"');
+    expect(detailActions).toContain("intent.data === 'publish' ? 'update_and_publish_job' : 'update_draft_job'");
+  });
+
+  it('supports editable submitted results, reasoning effort, and live file tables', () => {
+    const detail = readFileSync(new URL('../routes/app/jobs/[id]/+page.svelte', import.meta.url), 'utf8');
+    const detailActions = readFileSync(new URL('../routes/app/jobs/[id]/+page.server.ts', import.meta.url), 'utf8');
+    expect(detail).toContain("w.permissions.edit_submission ? '?/edit_submission' : '?/submit'");
+    expect(detail).toContain('<legend>Reasoning effort</legend>');
+    expect(detail).toContain('<h2>Attach relevant files</h2>');
+    expect(detail).toContain('<h2>Attach result files</h2>');
+    expect(detail).toContain('<table class="file-table">');
+    expect(detail).toContain('bind:value={draftPrompt}');
+    expect(detail).toContain('bind:value={resultResponse}');
+    expect(detail).toContain('>Uploading</td');
+    expect(detail).toContain('{#if w.permissions.copy_prompt}');
+    expect(detail).not.toContain('name="tools_used"');
+    expect(detail).not.toContain('Sealed task');
+    expect(detailActions).toContain('edit_submission: async');
+    expect(detailActions).toContain("locals.supabase.rpc('edit_submitted_result'");
+    expect(REASONING_EFFORTS).toEqual(['low', 'medium', 'high', 'extra_high', 'max', 'ultra', 'other']);
+  });
+
+  it('uses the fixed profile catalog and removes capabilities and admin model management', () => {
+    const profile = readFileSync(new URL('../routes/app/profile/+page.svelte', import.meta.url), 'utf8');
+    const admin = readFileSync(new URL('../routes/app/admin/+page.svelte', import.meta.url), 'utf8');
+    expect(PROFILE_MODELS).toEqual([
+      'GPT-6 Astra',
+      'GPT-5.6 Sol',
+      'GPT-5.6 Terra',
+      'GPT-5.6 Luna',
+      'Claude Fable 5.1',
+      'Claude Opus 5',
+      'Gemini Pro',
+      'SuperGrok'
+    ]);
+    expect(profile).toContain('<h2>Profile photo</h2>');
+    expect(profile).toContain('{#if data.photo}<button');
+    expect(profile).not.toContain('cleanupPhoto(data.photo.id, false)');
+    expect(profile).toContain('name="bio"');
+    expect(profile).toContain('Organization<select disabled');
+    expect(profile).not.toContain('name="capabilities"');
+    expect(admin).not.toContain('<h2>Models</h2>');
+    expect(admin).toContain('action="?/delete_invitation"');
+  });
+
+  it('uses the white workspace and dark navigation banner without the old warning strip', () => {
+    const layout = readFileSync(new URL('../routes/app/+layout.svelte', import.meta.url), 'utf8');
+    const styles = readFileSync(new URL('../app.css', import.meta.url), 'utf8');
+    expect(layout).not.toContain('Not approved for Restricted');
+    expect(styles).toContain('background: #121212;');
+    expect(styles).toContain('background: #fff;');
+    expect(styles).toContain('background: var(--accent);');
+  });
+
+  it('preserves pre-migration requester responses as result edit locks', () => {
+    const migration = readFileSync(
+      new URL('../../supabase/migrations/202609030003_workflow_overhaul.sql', import.meta.url),
+      'utf8'
+    );
+    expect(migration).toContain('with prior_follow_ups as (');
+    expect(migration).toContain(
+      'set requester_action_at = coalesce(parent.requester_action_at, follow_up.responded_at)'
+    );
+    expect(migration).toContain('set edit_locked_at = coalesce(submission.edit_locked_at, parent.requester_action_at)');
   });
 });

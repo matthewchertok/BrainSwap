@@ -19,54 +19,88 @@ export const JOB_TOOLS = [
   'File generation',
   'Other'
 ] as const;
-export const PROFILE_CAPABILITIES = JOB_TOOLS.filter((tool) => tool !== 'Other');
+export const PROFILE_MODELS = [
+  'GPT-6 Astra',
+  'GPT-5.6 Sol',
+  'GPT-5.6 Terra',
+  'GPT-5.6 Luna',
+  'Claude Fable 5.1',
+  'Claude Opus 5',
+  'Gemini Pro',
+  'SuperGrok'
+] as const;
+export const REASONING_EFFORTS = ['low', 'medium', 'high', 'extra_high', 'max', 'ultra', 'other'] as const;
 const uuid = z.string().uuid();
 const unique = <T>(values: T[]) => new Set(values).size === values.length;
 
-export const jobSchema = z
+const absoluteDeadline = z.iso.datetime({ offset: true }).nullable();
+const jobShape = z.object({
+  title: z.string().trim().max(120),
+  task_summary: z.string().trim().max(1000),
+  prompt: preservedOptional(100000).default(''),
+  chat_url: z.string().trim().max(2048).default(''),
+  preferred_model_text: z.string().trim().max(200),
+  acceptable_models_text: z.string().trim().max(1000),
+  deadline: absoluteDeadline,
+  required_tools: z.array(z.enum(JOB_TOOLS)).max(JOB_TOOLS.length).refine(unique, 'Choose each tool once.')
+});
+
+export const jobDraftSchema = jobShape.superRefine((data, context) => {
+  if (data.chat_url && !validExternalUrl(data.chat_url))
+    context.addIssue({
+      code: 'custom',
+      path: ['chat_url'],
+      message: 'The chat link must use HTTPS and must not contain credentials.'
+    });
+  if (data.deadline && new Date(data.deadline).getTime() <= Date.now())
+    context.addIssue({ code: 'custom', path: ['deadline'], message: 'Deadline must be in the future.' });
+});
+
+export const jobPublishSchema = jobShape.superRefine((data, context) => {
+  for (const [field, value] of [
+    ['title', data.title],
+    ['task_summary', data.task_summary],
+    ['prompt', data.prompt],
+    ['preferred_model_text', data.preferred_model_text]
+  ] as const) {
+    if (!value.trim())
+      context.addIssue({ code: 'custom', path: [field], message: 'This field is required to publish.' });
+  }
+  if (data.chat_url && !validExternalUrl(data.chat_url))
+    context.addIssue({
+      code: 'custom',
+      path: ['chat_url'],
+      message: 'The chat link must use HTTPS and must not contain credentials.'
+    });
+  if (data.deadline && new Date(data.deadline).getTime() <= Date.now())
+    context.addIssue({ code: 'custom', path: ['deadline'], message: 'Deadline must be in the future.' });
+});
+
+// Retain the public name for callers that require a publish-ready job.
+export const jobSchema = jobPublishSchema;
+
+export const submissionSchema = z
   .object({
-    title: trimmed(120),
-    listing_summary: trimmed(1000),
-    current_task: preservedRequired(100000),
-    success_criteria: preservedRequired(25000),
-    output_format: preservedRequired(10000),
-    visibility: z.enum(['lab', 'claimed_only']),
-    sensitivity: z.enum(['general', 'unpublished', 'collaborator', 'other']),
-    sensitivity_notes: z.string().trim().max(10000).default(''),
-    effort: z.enum(['quick', 'medium', 'heavy']),
-    preferred_model_id: uuid,
-    acceptable_model_ids: z.array(uuid).max(10).refine(unique, 'Choose each acceptable model once.'),
-    deadline: z.iso
-      .datetime({ offset: true })
-      .nullable()
-      .refine((value) => value === null || new Date(value).getTime() > Date.now(), 'Deadline must be in the future.'),
-    prior_context: preservedOptional(250000).default(''),
-    external_urls: z.array(z.string().trim().max(2048)).max(10).refine(unique, 'Enter each link once.'),
-    required_tools: z.array(z.enum(JOB_TOOLS)).max(JOB_TOOLS.length).refine(unique, 'Choose each tool once.'),
-    acknowledged: z.literal(true)
+    model_used_text: trimmed(200),
+    response_text: preservedRequired(500000),
+    notes: z.string().trim().max(25000).default(''),
+    reasoning_effort: z.enum(REASONING_EFFORTS),
+    reasoning_effort_other: z.string().trim().max(200).default('')
   })
   .superRefine((data, context) => {
-    if (data.acceptable_model_ids.includes(data.preferred_model_id))
+    if (data.reasoning_effort === 'other' && !data.reasoning_effort_other)
       context.addIssue({
         code: 'custom',
-        path: ['acceptable_model_ids'],
-        message: 'The preferred model is already included.'
+        path: ['reasoning_effort_other'],
+        message: 'Specify the reasoning effort.'
       });
-    data.external_urls.forEach((url, index) => {
-      if (!validExternalUrl(url))
-        context.addIssue({
-          code: 'custom',
-          path: ['external_urls', index],
-          message: 'Links must use HTTPS and must not contain credentials.'
-        });
-    });
+    if (data.reasoning_effort !== 'other' && data.reasoning_effort_other)
+      context.addIssue({
+        code: 'custom',
+        path: ['reasoning_effort_other'],
+        message: 'Only use this field when Other is selected.'
+      });
   });
-export const submissionSchema = z.object({
-  model_used_text: trimmed(200),
-  response_text: preservedRequired(500000),
-  notes: z.string().trim().max(25000).default(''),
-  tools_used: z.array(z.enum(JOB_TOOLS)).max(JOB_TOOLS.length).refine(unique, 'Choose each tool once.')
-});
 
 export const jobIdSchema = uuid;
 export const jobIntentSchema = z.enum(['draft', 'publish']);
@@ -81,13 +115,11 @@ export const adminMembershipSchema = z.object({
   role: z.enum(['member', 'admin']),
   active: z.boolean()
 });
+export const adminDeleteInvitationSchema = z.object({ membership_id: uuid });
 export const profileSchema = z.object({
   display_name: trimmed(120),
-  capabilities: z
-    .array(z.enum(PROFILE_CAPABILITIES as [string, ...string[]]))
-    .max(PROFILE_CAPABILITIES.length)
-    .refine(unique, 'Choose each capability once.'),
-  model_ids: z.array(uuid).max(50).refine(unique, 'Choose each model once.'),
+  bio: z.string().trim().max(2000).default(''),
+  model_ids: z.array(uuid).max(PROFILE_MODELS.length).refine(unique, 'Choose each model once.'),
   notify: z.boolean()
 });
 
@@ -174,6 +206,11 @@ export function validFile(name: string, mime: string, size: number) {
     return false;
   const ext = name.match(/\.([A-Za-z0-9]+)$/)?.[1]?.toLowerCase() ?? '';
   return size > 0 && size <= 25 * 1024 * 1024 && !!allowedFiles[ext]?.includes(mime);
+}
+export function validProfilePhoto(name: string, mime: string, size: number) {
+  if (!validFile(name, mime, size) || size > 5 * 1024 * 1024) return false;
+  const ext = name.match(/\.([A-Za-z0-9]+)$/)?.[1]?.toLowerCase() ?? '';
+  return ['png', 'jpg', 'jpeg', 'webp'].includes(ext);
 }
 export function totalFileSize(files: { size_bytes: number }[]) {
   return files.reduce((n, f) => n + f.size_bytes, 0);
