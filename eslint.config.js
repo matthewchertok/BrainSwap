@@ -12,7 +12,7 @@ export default tseslint.config(
     languageOptions: { parserOptions: { parser: tseslint.parser } }
   },
   prettier,
-  { ignores: ['.svelte-kit/**', 'build/**', 'src/lib/types/database.generated.ts'] },
+  { ignores: ['.svelte-kit/**', '.wrangler/**', 'build/**', 'src/lib/types/database.generated.ts'] },
   {
     languageOptions: { globals: { ...globals.browser, ...globals.node, App: 'readonly' } },
     rules: { 'svelte/no-navigation-without-resolve': 'off', 'svelte/require-each-key': 'off' }

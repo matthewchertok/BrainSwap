@@ -33,7 +33,7 @@ BrainSwap coordinates manual AI task handoffs inside one or more private researc
 
 ## Trust boundaries
 
-The browser is hostile. Supabase Auth establishes identity, while PostgreSQL/RLS and narrowly granted RPCs establish authorization. Supabase Storage enforces a second object boundary tied to database reservations. Cloudflare Pages executes SSR code and serves responses. Google, Supabase, Cloudflare, manually selected AI providers, webhook operators, and institutional file stores are external processors/trust boundaries.
+The browser is hostile. Supabase Auth establishes identity, while PostgreSQL/RLS and narrowly granted RPCs establish authorization. Supabase Storage enforces a second object boundary tied to database reservations. A Cloudflare Worker executes SSR code and serves responses. Google, Supabase, Cloudflare, manually selected AI providers, webhook operators, and institutional file stores are external processors/trust boundaries.
 
 No browser value—including organization, membership, actor, role, model, job, submission, or object path—is authoritative. No service-role key belongs in the application.
 

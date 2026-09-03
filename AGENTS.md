@@ -6,7 +6,7 @@ The repository is under pre-deployment security review. The current recommendati
 
 ## Architecture
 
-- SvelteKit SSR on Cloudflare Pages; TypeScript is strict and shared validation belongs in `src/lib`.
+- SvelteKit SSR on Cloudflare Workers, deployed through Workers Builds; TypeScript is strict and shared validation belongs in `src/lib`.
 - Supabase Auth, PostgreSQL, and private Storage are the only backend. Server requests use the caller's cookie session and publishable key, never a service-role key.
 - PostgreSQL RLS is the final authorization boundary. Browser users are hostile clients and may call REST, Storage, and RPC APIs directly.
 - Organization selection is an HTTP-only convenience cookie. Every protected load or mutation must resolve it against current active memberships and fail closed on membership-query errors.

@@ -4,7 +4,7 @@ This is the operator runbook for local verification and a later synthetic-data h
 
 ## 1. Confirm the gate and prerequisites
 
-Use an isolated Supabase project and Cloudflare Pages project for the pilot. Do not reuse a production or research-data database. Before proceeding, name an operator and incident contact and decide who owns Google, Supabase, Cloudflare, backups, retention, the optional webhook, and AI-provider approval.
+Use an isolated Supabase project and Cloudflare Worker for the pilot. Do not reuse a production or research-data database. Before proceeding, name an operator and incident contact and decide who owns Google, Supabase, Cloudflare, backups, retention, the optional webhook, and AI-provider approval.
 
 Install:
 
@@ -40,10 +40,11 @@ npm run lint
 npm test
 npm run security:check
 npm run build
+npm run deploy:check
 git diff --check
 ```
 
-The copied values are deliberately nonfunctional compile-time placeholders. They let configuration validation, type checking, and the build run before a local Supabase stack exists; they do not permit login or API access. The build must create `.svelte-kit/cloudflare/_worker.js`. Stop on any failure. Do not use `npm audit fix --force`; review dependency advisories and compatible updates deliberately. Keep `.env` untracked and replace the placeholders with the local values in step 3 before starting the app.
+The copied values are deliberately nonfunctional compile-time placeholders. They let configuration validation, type checking, the build, and Wrangler's non-mutating deployment dry run complete before a local Supabase stack exists; they do not permit login or API access. The build must create `.svelte-kit/cloudflare/_worker.js`. Stop on any failure. Do not use `npm audit fix --force`; review dependency advisories and compatible updates deliberately. Keep `.env` untracked and replace the placeholders with the local values in step 3 before starting the app.
 
 ## 3. Start a fresh local Supabase stack
 
@@ -82,7 +83,7 @@ For local OAuth, create a Google **Web application** client for testing. In Goog
 http://127.0.0.1:54321/auth/v1/callback
 ```
 
-BrainSwap does not use Google's JavaScript sign-in flow, so do not add application/Pages origins to Google's Authorized JavaScript origins merely for this server-side PKCE flow.
+BrainSwap does not use Google's JavaScript sign-in flow, so do not add the application origin to Google's Authorized JavaScript origins merely for this server-side PKCE flow.
 
 In a temporary, reviewed local change to `supabase/config.toml`, add:
 
@@ -183,21 +184,26 @@ Store the Google client ID and secret only in Supabase Authentication -> Provide
 
 In Supabase Auth URL Configuration:
 
-- set Site URL to the final HTTPS Pages origin; and
-- add exact redirect allowlist entries for `https://YOUR_PAGES_HOST/auth/callback` and any intentional custom-domain callback.
+- set Site URL to the final HTTPS Worker origin; and
+- add exact redirect allowlist entries for `https://YOUR_WORKER_HOST/auth/callback` and any intentional custom-domain callback.
 
 Add `http://localhost:5173/auth/callback` only when local application OAuth is intentionally supported. Preview deployment callbacks should not be wildcarded; add an exact preview URL only for a controlled test, then remove it.
 
-## 9. Create the Cloudflare Pages deployment
+## 9. Create the Cloudflare Workers deployment
 
-This is also a manual cloud action. Connect the private repository in Cloudflare Pages with:
+This is also a manual cloud action. In Cloudflare **Workers & Pages**, choose **Create application**, connect the private repository through **Workers Builds**, and use:
 
 - production branch: `main`;
 - build command: `npm run build`;
-- build output directory: `.svelte-kit/cloudflare`; and
+- deploy command: `npx wrangler deploy`;
+- root path: `/`;
+- builds for non-production branches: disabled until preview OAuth redirects are deliberately configured;
+- Cloudflare Access: disabled for the application login flow; and
 - Node version: `24.15.0` or another version satisfying `>=24.15.0 <25` (the checked-in `.nvmrc` also declares `24.15.0`).
 
-Set these Pages environment variables for the intended environment:
+The checked-in `wrangler.jsonc` supplies the Worker entry point, static-assets binding, Node compatibility, and disables preview URLs and observability. Do not let Wrangler auto-configure the repository during deployment. The pinned local Wrangler package and explicit configuration make the deploy step non-interactive.
+
+Set these values as Cloudflare **build variables** so the SvelteKit build can validate them:
 
 ```text
 NODE_VERSION=24.15.0
@@ -207,7 +213,11 @@ PUBLIC_APP_NAME=BrainSwap
 PUBLIC_APP_TAGLINE=Hand off AI jobs when your model cannot finish them.
 ```
 
-Do not add a Supabase service-role/secret key, database password, or Google secret. Configure `NOTIFICATION_WEBHOOK_URL` only if the reviewed build has a reachable metadata-only webhook path, the endpoint owner is known, and failure behavior has been tested. After Pages assigns a hostname, return to step 8 and make the Supabase Site URL/redirect entry exact.
+Do not add a Supabase service-role/secret key, database password, or Google secret. Configure `NOTIFICATION_WEBHOOK_URL` only if the reviewed build has a reachable metadata-only webhook path, the endpoint owner is known, and failure behavior has been tested.
+
+After the first deploy creates the Worker, open its **Settings -> Variables and Secrets** and add the same four `PUBLIC_*` values as runtime text variables. The application uses dynamic public environment access at request time and intentionally fails closed if the Supabase URL or publishable key is absent. `keep_vars` is enabled in `wrangler.jsonc` so later deployments preserve dashboard-managed runtime values. Do not put secrets in a `PUBLIC_*` variable.
+
+After Cloudflare assigns the `workers.dev` hostname, return to step 8 and set the Supabase Site URL and redirect allowlist to that exact HTTPS origin. Then redeploy once and inspect the deployed response headers before login testing.
 
 ## 10. Invite pilot users and complete synthetic acceptance
 
