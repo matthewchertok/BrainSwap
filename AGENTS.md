@@ -7,7 +7,7 @@ The repository is under pre-deployment security review. The current recommendati
 ## Architecture
 
 - SvelteKit SSR on Cloudflare Workers, deployed through Workers Builds; TypeScript is strict and shared validation belongs in `src/lib`.
-- Supabase Auth, PostgreSQL, and private Storage are the only backend. Server requests use the caller's cookie session and publishable key, never a service-role key.
+- Supabase Auth, PostgreSQL, and private Storage are the application data backend. Server requests use the caller's cookie session and publishable key, never a service-role key. Resend is used only from the server to deliver the minimal access-request email.
 - PostgreSQL RLS is the final authorization boundary. Browser users are hostile clients and may call REST, Storage, and RPC APIs directly.
 - Organization selection is an HTTP-only convenience cookie. Every protected load or mutation must resolve it against current active memberships and fail closed on membership-query errors.
 - Privileged public RPC entrypoints may use `security definer`; internal authorization helpers belong in `private`. Every definer uses `search_path = ''`, schema-qualified object names, explicit NULL-safe authorization checks, and the narrowest workable grants. RLS helpers must retain the schema/function privileges required for policy evaluation; do not confuse revoking direct mutation entrypoints with making policy helpers uncallable.
@@ -15,6 +15,7 @@ The repository is under pre-deployment security review. The current recommendati
 ## Security invariants
 
 - Eligibility is an exact normalized invitation email confirmed by Supabase Auth. A session or institutional email domain alone is never authorization.
+- An access request is not authorization. It must use a verified primary Google identity, send only the normalized email plus fixed request wording through a server-only Resend key, and never create or reactivate a membership.
 - Never trust browser-supplied actor, membership, organization, role, or model identifiers. Re-derive the actor and selected organization server-side and again at the database boundary.
 - Never log or notify task bodies, model output, revision instructions, credentials, tokens, OAuth codes, sensitive URLs, filenames, or file contents.
 - Never integrate with model providers, accept their credentials, automate their websites, scrape conversations, or pool quotas. Helpers perform model work manually.
@@ -34,4 +35,4 @@ Database authorization changes require a fresh local reset and pgTAP run. If Doc
 
 ## Non-goals
 
-No public membership enrollment/community, billing, chat, analytics, model inference/API integration, credential or quota sharing, browser automation, or canonical research-data storage. Google may create an Auth identity on first OAuth sign-in, but only an active exact-email invitation can create application membership.
+No public membership enrollment/community, billing, chat, analytics, model inference/API integration, credential or quota sharing, browser automation, or canonical research-data storage. Google may create an Auth identity on first OAuth sign-in, and an uninvited identity may request operator review, but only an active exact-email invitation can create application membership.

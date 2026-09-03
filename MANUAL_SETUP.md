@@ -1,10 +1,10 @@
 # Manual setup runbook
 
-This is the operator runbook for local verification and a later synthetic-data hosted deployment. No cloud resources were created or modified during the repository audit. The current recommendation is `BLOCK PILOT`; completing these steps records evidence but does not itself authorize real research data.
+This is the operator runbook for local verification and the isolated synthetic-data hosted deployment. The current recommendation is `BLOCK PILOT`; completing these steps records evidence but does not itself authorize real research data.
 
 ## 1. Confirm the gate and prerequisites
 
-Use an isolated Supabase project and Cloudflare Worker for the pilot. Do not reuse a production or research-data database. Before proceeding, name an operator and incident contact and decide who owns Google, Supabase, Cloudflare, backups, retention, the optional webhook, and AI-provider approval.
+Use an isolated Supabase project and Cloudflare Worker for the pilot. Do not reuse a production or research-data database. Before proceeding, name an operator and incident contact and decide who owns Google, Supabase, Cloudflare, Resend, backups, retention, the optional webhook, and AI-provider approval.
 
 Install:
 
@@ -132,7 +132,7 @@ Paste the reviewed SQL into the local Supabase Studio SQL editor and execute it 
 
 ## 6. Create and link an isolated hosted Supabase project
 
-This is a manual cloud action; it was not performed by the audit. Create a new Supabase project and securely record its project reference, project URL, publishable key, database recovery information, and owner. Do not copy real data into it.
+For a new environment, create an isolated Supabase project and securely record its project reference, project URL, publishable key, database recovery information, and owner. The current pilot project was created during follow-up setup, but these checks still apply. Do not copy real data into it.
 
 Authenticate and link this checkout:
 
@@ -201,7 +201,7 @@ This is also a manual cloud action. In Cloudflare **Workers & Pages**, choose **
 - Cloudflare Access: disabled for the application login flow; and
 - Node version: `24.15.0` or another version satisfying `>=24.15.0 <25` (the checked-in `.nvmrc` also declares `24.15.0`).
 
-The checked-in `wrangler.jsonc` supplies the Worker entry point, static-assets binding, Node compatibility, and disables preview URLs and observability. Do not let Wrangler auto-configure the repository during deployment. The pinned local Wrangler package and explicit configuration make the deploy step non-interactive.
+The checked-in `wrangler.jsonc` supplies the Worker entry point, static-assets binding, Node compatibility, and disables preview URLs, observability, Wrangler usage metrics, and dependency instrumentation. Do not let Wrangler auto-configure the repository during deployment. The pinned local Wrangler package and explicit configuration make the deploy step non-interactive.
 
 Set these values as Cloudflare **build variables** so the SvelteKit build can validate them:
 
@@ -217,11 +217,25 @@ Do not add a Supabase service-role/secret key, database password, or Google secr
 
 After the first deploy creates the Worker, open its **Settings -> Variables and Secrets** and add the same four `PUBLIC_*` values as runtime text variables. The application uses dynamic public environment access at request time and intentionally fails closed if the Supabase URL or publishable key is absent. `keep_vars` is enabled in `wrangler.jsonc` so later deployments preserve dashboard-managed runtime values. Do not put secrets in a `PUBLIC_*` variable.
 
+To enable automatic access-request email, create a Resend account and a restricted **sending-access** API key. In the Worker's **Settings -> Variables and Secrets**, add these runtime values; they are not build variables:
+
+```text
+RESEND_API_KEY=YOUR_RESEND_KEY                  # Secret
+ACCESS_REQUEST_EMAIL_TO=YOUR_OPERATOR_EMAIL    # Secret
+ACCESS_REQUEST_EMAIL_FROM=onboarding@resend.dev # Text
+```
+
+All three values are required; the login page hides **Request access** until all three validate. Never prefix them with `PUBLIC_`, commit them, or put them in GitHub build variables. The `resend.dev` sender is suitable only when `ACCESS_REQUEST_EMAIL_TO` is the email on the Resend account. To send to any other recipient, verify a domain you own in Resend and use an address at that exact domain for `ACCESS_REQUEST_EMAIL_FROM`. Leave email open/click tracking disabled; the message contains no links.
+
+The Worker sends one plain-text sentence: `<verified Google email> is requesting access to BrainSwap.` A stable hashed idempotency key lets Resend suppress repeats for its documented 24-hour retention window. The request never creates or changes a membership. If any email setting is missing or delivery fails, the requester sees a failure message and remains signed out.
+
 After Cloudflare assigns the `workers.dev` hostname, return to step 8 and set the Supabase Site URL and redirect allowlist to that exact HTTPS origin. Then redeploy once and inspect the deployed response headers before login testing.
 
 ## 10. Invite pilot users and complete synthetic acceptance
 
-Sign in as the exact bootstrap admin. In `/app/admin`, add exact invitation emails for at least a requester, two competing helpers, and a separate cross-organization test account/organization. No invitation email is sent by BrainSwap. Verify each membership, role, and organization before proceeding.
+Sign in as the exact bootstrap admin. In `/app/admin`, add exact invitation emails for at least a requester, two competing helpers, and a separate cross-organization test account/organization. Adding an invitation grants eligibility but does not send an invitation or approval email. Verify each membership, role, and organization before proceeding.
+
+Before inviting one synthetic account, use **Request access** with that account. Confirm the operator receives exactly the one-line request, the requester remains unable to open `/app`, and a repeat request within 24 hours produces no duplicate email. Then review the exact address and add it manually in `/app/admin`.
 
 Run [docs/acceptance-test.md](docs/acceptance-test.md) using dummy tasks and files. Record tester, timestamp, commit, browser, expected/actual result, response headers, and screenshots that contain no sensitive payload. Any authorization, Storage, deletion, OAuth, CSP, or cross-organization failure keeps the recommendation at `BLOCK PILOT`.
 

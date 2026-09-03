@@ -3,7 +3,10 @@
 </script>
 
 <h1>Administration</h1>
-<p class="notice">Invitations are exact-email only. The last active administrator cannot be demoted or deactivated.</p>
+<p class="notice">
+  Invitations match an exact Google account email. Adding one grants eligibility but does not send an email. The last
+  active administrator cannot be demoted or deactivated.
+</p>
 {#if form?.message}<p>{form.message}</p>{/if}
 {#if data.notice}<p class="notice">{data.notice}</p>{/if}
 <form method="POST" action="?/invite" class="panel">

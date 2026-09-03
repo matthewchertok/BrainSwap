@@ -69,11 +69,14 @@ Record exact command output and test counts. Any skipped database gate is `NOT R
 1. Request a known `/app/jobs/<uuid>` URL while signed out. Expect a redirect to login and no application data in the response.
 2. Begin Google sign-in with a crafted `next` value for an external origin, protocol-relative URL, encoded backslash, control character, `/login`, and `/application`. Expect every case to return only to `/app` or an `/app/...` descendant.
 3. Sign in with the uninvited account. Expect membership claiming to return no membership, the Supabase session to be signed out, and `/app` to remain inaccessible.
-4. Invite an address with mixed case/outer whitespace only through the documented normalized path. Confirm only the exact confirmed Auth email claims it.
-5. Attempt to claim that invitation with another account and attempt to rebind a previously claimed membership. Expect both to fail.
-6. Sign out through POST. Refresh and use the Back button; protected content must not be restored from a shared/browser cache.
-7. Force a membership-query error in a disposable environment. Protected routing must fail closed rather than treating the error as an empty but authorized result.
-8. Inspect Supabase Auth providers and attempt direct email/password, magic-link, phone, anonymous, and unused social-provider sign-in requests. Only Google OAuth may create/sign in an identity; an uninvited Google identity must still receive no application access.
+4. With an uninvited Google account, choose **Request access**. Confirm the operator receives exactly `<normalized email> is requesting access to BrainSwap.`, the requester is signed out, and no membership or organization data is created or returned.
+5. Repeat that request within 24 hours. Confirm Resend's idempotency handling produces no second email. Confirm the idempotency header does not contain the raw requester address.
+6. Use ordinary **Sign in with Google** with another uninvited account. Confirm it sends no access-request email. Temporarily remove one email setting and simulate a Resend non-2xx response; request delivery must fail closed, reveal no provider detail, create no membership, and leave the account signed out.
+7. Invite an address with mixed case/outer whitespace only through the documented normalized path. Confirm only the exact confirmed Auth email claims it and that adding the invitation itself sends no email.
+8. Attempt to claim that invitation with another account and attempt to rebind a previously claimed membership. Expect both to fail.
+9. Sign out through POST. Refresh and use the Back button; protected content must not be restored from a shared/browser cache.
+10. Force a membership-query error in a disposable environment. Protected routing and access requests must fail closed rather than treating the error as an empty membership result.
+11. Inspect Supabase Auth providers and attempt direct email/password, magic-link, phone, anonymous, and unused social-provider sign-in requests. Only a primary verified Google identity may create/sign in an identity or trigger an access-request email; an uninvited identity must still receive no application access.
 
 ## 3. Organization and administrator isolation
 
@@ -141,14 +144,17 @@ For both a requester job file and claimant result file, test reservation -> uplo
 ## 9. Notifications, webhook, audit, and logging
 
 1. Exercise publish, claim, submit, revision, accept, cancellation, expiry replacement, and administrative changes.
-2. Inspect notification text, webhook bodies, audit metadata, Cloudflare logs, and Supabase logs. They may contain safe identifiers/event types but no task/result/revision/file content, credentials, OAuth codes/tokens, or sensitive URLs.
+2. Inspect notification text, webhook bodies, audit metadata, Cloudflare logs, and Supabase logs. They may contain safe identifiers/event types but no task/result/revision/file content, credentials, OAuth codes/tokens, sensitive URLs, access-request addresses, or email bodies. Resend's own transactional record necessarily contains the operator address and the one-line requester address; verify it contains nothing else.
 3. Confirm the requester is excluded from new-job notifications and inactive members are not treated as active recipients. The MVP does not claim capability/model matching.
 4. If a webhook is configured, force timeout/non-2xx/unreachable behavior. The already-committed core transition must remain successful and no secret may reach client JavaScript.
 5. Confirm there is no analytics or tracking request.
+6. Confirm the Resend key and recipient are absent from browser JavaScript, HTML, network requests, build output, and Git. Confirm the access-request email is plain text and has no tracking link or pixel.
 
 ## 10. Headers, caching, accessibility, and responsive smoke tests
 
 At desktop width and an iPhone-sized viewport, test login, organization selection, dashboard, new job, sealed detail before/after claim, submission, revision, admin, profile, notifications, file actions, follow-up, and deletion.
+
+On the dashboard, change tabs over a throttled connection. The selected tab must update immediately, a visible loading status must be announced, and the prior results must remain clearly pending until the server-authorized response arrives.
 
 For protected/auth responses verify:
 

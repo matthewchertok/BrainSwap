@@ -2,6 +2,13 @@ import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import svelteConfig from '../../svelte.config.js';
 import { contextMarkdown, followUpSnapshot, runnablePrompt } from './prompt';
+import {
+  accessRequestEmailBody,
+  accessRequestIdempotencyKey,
+  deliverAccessRequestEmail,
+  verifiedPrimaryGoogleEmail,
+  type AccessRequestEmailSettings
+} from './server/access-request-email';
 import { parseJobForm } from './server/job-form';
 import { getSelectedMembership, type ActiveMembership } from './server/membership';
 import { applyBaselineSecurityHeaders } from './server/security-headers';
@@ -196,5 +203,102 @@ describe('security headers', () => {
       supabaseOrigin,
       'https://accounts.google.com'
     ]);
+  });
+});
+
+describe('access request email', () => {
+  const settings: AccessRequestEmailSettings = {
+    apiKey: 'test-only-api-key',
+    recipient: 'operator@example.com',
+    sender: 'notifications@example.com'
+  };
+
+  it('uses the verified email in a minimal plain-text message', () => {
+    expect(accessRequestEmailBody(' Requester@Example.com ')).toBe(
+      'requester@example.com is requesting access to BrainSwap.'
+    );
+    expect(accessRequestEmailBody('not-an-email')).toBeNull();
+  });
+
+  it('accepts only a confirmed primary Google identity', () => {
+    expect(
+      verifiedPrimaryGoogleEmail({
+        email: ' Requester@Example.com ',
+        email_confirmed_at: '2026-09-03T00:00:00Z',
+        app_metadata: { provider: 'google' }
+      })
+    ).toBe('requester@example.com');
+    expect(
+      verifiedPrimaryGoogleEmail({
+        email: 'requester@example.com',
+        email_confirmed_at: '2026-09-03T00:00:00Z',
+        app_metadata: { provider: 'github' }
+      })
+    ).toBeNull();
+    expect(
+      verifiedPrimaryGoogleEmail({ email: 'requester@example.com', app_metadata: { provider: 'google' } })
+    ).toBeNull();
+  });
+
+  it('creates a stable hashed idempotency key without exposing the email', async () => {
+    const first = await accessRequestIdempotencyKey('requester@example.com', settings);
+    const retry = await accessRequestIdempotencyKey('requester@example.com', settings);
+    expect(first).toBe(retry);
+    expect(first).not.toContain('requester');
+    expect(first.length).toBeLessThan(256);
+  });
+
+  it('sends only the bounded message with a server-side key', async () => {
+    let capturedUrl = '';
+    let capturedInit: RequestInit | undefined;
+    const fetcher = (async (input: URL | RequestInfo, init?: RequestInit) => {
+      capturedUrl = String(input);
+      capturedInit = init;
+      return new Response(JSON.stringify({ id: 'test-message-id' }), { status: 200 });
+    }) as typeof fetch;
+
+    await expect(deliverAccessRequestEmail('requester@example.com', settings, { fetcher })).resolves.toBe('sent');
+
+    const headers = new Headers(capturedInit?.headers);
+    const payload = JSON.parse(String(capturedInit?.body));
+    expect(capturedUrl).toBe('https://api.resend.com/emails');
+    expect(capturedInit?.method).toBe('POST');
+    expect(headers.get('authorization')).toBe('Bearer test-only-api-key');
+    expect(headers.get('idempotency-key')).toMatch(/^brainswap-access\/[0-9a-f]{64}$/);
+    expect(payload).toEqual({
+      from: 'BrainSwap <notifications@example.com>',
+      to: ['operator@example.com'],
+      subject: 'BrainSwap access request',
+      text: 'requester@example.com is requesting access to BrainSwap.'
+    });
+  });
+
+  it('rejects invalid email data before attempting delivery', async () => {
+    let called = false;
+    const fetcher = (async () => {
+      called = true;
+      return new Response(null, { status: 200 });
+    }) as typeof fetch;
+    await expect(deliverAccessRequestEmail('invalid', settings, { fetcher })).resolves.toBe('failed');
+    expect(called).toBe(false);
+  });
+});
+
+describe('UI feedback contracts', () => {
+  it('keeps dashboard tab navigation visibly and accessibly pending', () => {
+    const dashboard = readFileSync(new URL('../routes/app/+page.svelte', import.meta.url), 'utf8');
+    expect(dashboard).toContain("import { navigating } from '$app/state'");
+    expect(dashboard).toContain('role="status" aria-live="polite"');
+    expect(dashboard).toContain('class:pending={pendingTab !== null}');
+  });
+
+  it('uses versioned login copy, a POST access request, and the requested accent', () => {
+    const login = readFileSync(new URL('../routes/login/+page.svelte', import.meta.url), 'utf8');
+    const styles = readFileSync(new URL('../app.css', import.meta.url), 'utf8');
+    expect(login).toContain('<p class="eyebrow">{brand.version}</p>');
+    expect(login).toContain('<form method="POST" action="?/requestAccess">');
+    expect(login).toContain('Do not submit anything sensitive');
+    expect(styles).toContain('--accent: #e77500;');
+    expect(styles).not.toContain('--green:');
   });
 });

@@ -35,7 +35,8 @@ export const handle: Handle = async ({ event, resolve }) => {
   if (
     event.url.pathname.startsWith('/app') ||
     event.url.pathname.startsWith('/auth') ||
-    event.url.pathname === '/login'
+    event.url.pathname === '/login' ||
+    event.url.pathname === '/unauthorized'
   )
     response.headers.set('Cache-Control', 'no-store, private');
   if (event.url.protocol === 'https:' && !['localhost', '127.0.0.1', '[::1]'].includes(event.url.hostname))
