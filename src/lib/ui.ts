@@ -26,3 +26,19 @@ export function approvalEmailHref(recipient: string) {
   });
   return `mailto:${encodeURIComponent(recipient)}?${query.toString()}`;
 }
+
+export function dateTimeLocalToIso(value: string) {
+  if (!/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/.test(value)) return '';
+  const instant = new Date(value);
+  if (Number.isNaN(instant.getTime()) || isoToDateTimeLocal(instant.toISOString()) !== value) return '';
+  return instant.toISOString();
+}
+
+export function isoToDateTimeLocal(value: string | null, offsetMinutes?: number) {
+  if (!value) return '';
+  const instant = new Date(value);
+  if (Number.isNaN(instant.getTime())) return '';
+  const offset = offsetMinutes ?? instant.getTimezoneOffset();
+  if (!Number.isFinite(offset)) return '';
+  return new Date(instant.getTime() - offset * 60_000).toISOString().slice(0, 16);
+}

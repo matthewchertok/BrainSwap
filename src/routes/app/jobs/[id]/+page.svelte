@@ -1,9 +1,11 @@
 <script lang="ts">
   import { goto, invalidateAll } from '$app/navigation';
+  import { onMount } from 'svelte';
+  import JobStatus from '$lib/components/JobStatus.svelte';
   import { runnablePrompt } from '$lib/prompt';
   import { downloadPrivateFile, uploadReservedFile } from '$lib/storage';
   import { getBrowserSupabase } from '$lib/supabase-browser';
-  import { statusLabel } from '$lib/ui';
+  import { dateTimeLocalToIso, isoToDateTimeLocal } from '$lib/ui';
   import { JOB_TOOLS, validFile } from '$lib/validation';
 
   let { data, form } = $props();
@@ -13,7 +15,13 @@
   let fileMessage = $state('');
   let jobFileDescription = $state('');
   let resultFileDescription = $state('');
+  let deadlineLocal = $state('');
+  let deadlineIso = $derived(dateTimeLocalToIso(deadlineLocal));
   let prompt = $derived(w.payload ? runnablePrompt(w.payload, w.contexts ?? [], w.files ?? []) : '');
+
+  onMount(() => {
+    deadlineLocal = isoToDateTimeLocal(w.job.deadline);
+  });
 
   async function copy() {
     try {
@@ -211,7 +219,7 @@
 
 <article>
   <div class="card-top">
-    <span class="pill">{statusLabel(w.job.status)}</span><span
+    <JobStatus status={w.job.status} /><span
       >{w.job.visibility === 'claimed_only' ? 'Sealed task' : 'Lab-visible task'}</span
     >
   </div>
@@ -321,12 +329,16 @@
         </select></label
       >
       <label
-        >Deadline (ISO timestamp with offset)<input
-          name="deadline"
-          value={w.job.deadline ?? ''}
-          placeholder="2026-09-30T17:00:00-04:00"
+        >Deadline (optional)<input
+          type="datetime-local"
+          name="deadline_local"
+          bind:value={deadlineLocal}
+          step="60"
+          aria-describedby="edit-deadline-help"
         /></label
       >
+      <input type="hidden" name="deadline" value={deadlineIso} />
+      <p id="edit-deadline-help">Choose the date and time in your device's local timezone.</p>
       <label
         >Visibility<select name="visibility">
           <option value="claimed_only" selected={w.job.visibility === 'claimed_only'}>Sealed until claimed</option>

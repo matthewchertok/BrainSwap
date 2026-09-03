@@ -2,6 +2,7 @@ import { jobSchema } from '$lib/validation';
 
 export function parseJobForm(form: FormData) {
   const deadline = text(form.get('deadline'));
+  const localDeadline = text(form.get('deadline_local'));
   const parsed = jobSchema.safeParse({
     title: form.get('title'),
     listing_summary: form.get('listing_summary'),
@@ -12,7 +13,9 @@ export function parseJobForm(form: FormData) {
     sensitivity: form.get('sensitivity'),
     sensitivity_notes: form.get('sensitivity_notes') ?? '',
     effort: form.get('effort'),
-    deadline: deadline || null,
+    // The browser converts datetime-local to an absolute instant. Fail validation
+    // instead of silently dropping a selected deadline when that conversion is absent.
+    deadline: deadline || (localDeadline ? 'invalid-local-deadline' : null),
     preferred_model_id: form.get('preferred_model_id'),
     acceptable_model_ids: form.getAll('acceptable_model_ids'),
     required_tools: form.getAll('required_tools'),

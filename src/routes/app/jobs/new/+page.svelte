@@ -1,5 +1,9 @@
 <script lang="ts">
+  import { dateTimeLocalToIso } from '$lib/ui';
+
   let { data, form } = $props();
+  let deadlineLocal = $state('');
+  let deadlineIso = $derived(dateTimeLocalToIso(deadlineLocal));
   const tools = [
     'Web access',
     'Deep research',
@@ -68,13 +72,15 @@
       ></label
     ><label
       >Deadline (optional)<input
-        type="text"
-        name="deadline"
-        placeholder="2026-09-30T17:00:00-04:00"
+        type="datetime-local"
+        name="deadline_local"
+        bind:value={deadlineLocal}
+        step="60"
         aria-describedby="deadline-help"
       /></label
     >
-    <p id="deadline-help">Use an ISO 8601 timestamp with an explicit UTC offset; no timezone is assumed.</p>
+    <input type="hidden" name="deadline" value={deadlineIso} />
+    <p id="deadline-help">Choose the date and time in your device's local timezone.</p>
     <label
       >Visibility<select name="visibility"
         ><option value="claimed_only">Sealed until claimed</option><option value="lab">Lab-visible</option></select

@@ -40,6 +40,7 @@ export const actions: Actions = {
         jobId: id.data,
         organizationId: membership.organization_id
       });
+      redirect(303, `/app/jobs/${id.data}?published=1`);
     }
     redirect(303, `/app/jobs/${id.data}?created=1`);
   }

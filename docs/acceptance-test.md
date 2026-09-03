@@ -156,6 +156,10 @@ At desktop width and an iPhone-sized viewport, test login, organization selectio
 
 On the dashboard, change tabs over a throttled connection. The selected tab must update immediately, a visible loading status must be announced, and the prior results must remain clearly pending until the server-authorized response arrives.
 
+Create and edit a draft with a deadline. Confirm the browser provides a native local date-and-time picker, the stored instant displays in local time when editing, and malformed, unzoned, missing-conversion, and past values still fail server-side validation.
+
+Confirm job status is non-interactive text with a visible dot: amber for **Open** and green for **Submitted**. Keyboard and pointer interaction must not suggest that the status is a button.
+
 For protected/auth responses verify:
 
 - `Content-Security-Policy` permits required SvelteKit/Supabase behavior without console violations and includes frame/object restrictions;

@@ -22,7 +22,33 @@ import {
   jobSchema,
   submissionSchema
 } from './validation';
-import { approvalEmailHref, claimExpired, controls, safeNotification, statusLabel } from './ui';
+import {
+  approvalEmailHref,
+  claimExpired,
+  controls,
+  dateTimeLocalToIso,
+  isoToDateTimeLocal,
+  safeNotification,
+  statusLabel
+} from './ui';
+
+function completeJobForm() {
+  const form = new FormData();
+  form.set('title', 'Task');
+  form.set('listing_summary', 'Summary');
+  form.set('current_task', '  Continue with indentation\n');
+  form.set('success_criteria', 'Checked result');
+  form.set('output_format', 'Text');
+  form.set('visibility', 'claimed_only');
+  form.set('sensitivity', 'general');
+  form.set('effort', 'quick');
+  form.set('preferred_model_id', '11111111-1111-4111-8111-111111111111');
+  form.set('prior_context', 'Previous result');
+  form.set('external_urls', 'https://drive.example/one\nhttps://drive.example/two');
+  form.set('acknowledged', 'yes');
+  return form;
+}
+
 describe('handoff exports', () => {
   const job = { current_task: 'Continue analysis', success_criteria: 'A checked answer', output_format: 'Plain text' };
   it('generates bounded runnable prompt', () => {
@@ -100,19 +126,7 @@ describe('validation', () => {
     ).toBe(false);
   });
   it('parses form data without converting missing values to strings', () => {
-    const form = new FormData();
-    form.set('title', 'Task');
-    form.set('listing_summary', 'Summary');
-    form.set('current_task', '  Continue with indentation\n');
-    form.set('success_criteria', 'Checked result');
-    form.set('output_format', 'Text');
-    form.set('visibility', 'claimed_only');
-    form.set('sensitivity', 'general');
-    form.set('effort', 'quick');
-    form.set('preferred_model_id', '11111111-1111-4111-8111-111111111111');
-    form.set('prior_context', 'Previous result');
-    form.set('external_urls', 'https://drive.example/one\nhttps://drive.example/two');
-    form.set('acknowledged', 'yes');
+    const form = completeJobForm();
     const parsed = parseJobForm(form);
     expect(parsed.success).toBe(true);
     if (parsed.success) {
@@ -302,6 +316,36 @@ describe('approval email link', () => {
   });
 });
 
+describe('deadline picker conversion', () => {
+  it('converts an absolute deadline to a local calendar value with an explicit test offset', () => {
+    expect(isoToDateTimeLocal('2099-09-30T21:00:00.000Z', 240)).toBe('2099-09-30T17:00');
+  });
+
+  it('converts a valid local calendar value to an absolute ISO timestamp', () => {
+    const value = '2099-09-30T17:00';
+    expect(dateTimeLocalToIso(value)).toBe(new Date(value).toISOString());
+    expect(dateTimeLocalToIso('')).toBe('');
+    expect(dateTimeLocalToIso('not-a-date')).toBe('');
+  });
+
+  it('fails closed when a selected local deadline lacks browser timezone conversion', () => {
+    const form = completeJobForm();
+    form.set('deadline_local', '2099-09-30T17:00');
+    expect(parseJobForm(form).success).toBe(false);
+  });
+
+  it('accepts the browser-converted absolute deadline', () => {
+    const form = completeJobForm();
+    const local = '2099-09-30T17:00';
+    const absolute = dateTimeLocalToIso(local);
+    form.set('deadline_local', local);
+    form.set('deadline', absolute);
+    const parsed = parseJobForm(form);
+    expect(parsed.success).toBe(true);
+    if (parsed.success) expect(parsed.input.deadline).toBe(absolute);
+  });
+});
+
 describe('UI feedback contracts', () => {
   it('keeps dashboard tab navigation visibly and accessibly pending', () => {
     const dashboard = readFileSync(new URL('../routes/app/+page.svelte', import.meta.url), 'utf8');
@@ -326,5 +370,30 @@ describe('UI feedback contracts', () => {
     expect(admin).not.toContain('<label>Exact email');
     expect(admin).toContain('href={approvalEmailHref(m.invited_email)}');
     expect(admin).toContain('>Email approval</a');
+  });
+
+  it('uses native local date-time controls and non-interactive job status indicators', () => {
+    const newJob = readFileSync(new URL('../routes/app/jobs/new/+page.svelte', import.meta.url), 'utf8');
+    const detail = readFileSync(new URL('../routes/app/jobs/[id]/+page.svelte', import.meta.url), 'utf8');
+    const status = readFileSync(new URL('./components/JobStatus.svelte', import.meta.url), 'utf8');
+    const styles = readFileSync(new URL('../app.css', import.meta.url), 'utf8');
+    expect(newJob).toContain('type="datetime-local"');
+    expect(detail).toContain('type="datetime-local"');
+    expect(newJob).not.toContain('ISO 8601 timestamp');
+    expect(detail).toContain('<JobStatus status={w.job.status} />');
+    expect(status).toContain("class:is-open={status === 'open'}");
+    expect(status).toContain("status === 'submitted' || status === 'accepted'");
+    expect(status).not.toContain('<button');
+    expect(styles).toContain('.job-status.is-open .job-status-dot');
+    expect(styles).toContain('background: #e2aa00;');
+    expect(styles).toContain('.job-status.is-success .job-status-dot');
+    expect(styles).toContain('background: #38a169;');
+  });
+
+  it('distinguishes a published job from a saved draft in the confirmation copy', () => {
+    const createAction = readFileSync(new URL('../routes/app/jobs/new/+page.server.ts', import.meta.url), 'utf8');
+    const detailLoad = readFileSync(new URL('../routes/app/jobs/[id]/+page.server.ts', import.meta.url), 'utf8');
+    expect(createAction).toContain('redirect(303, `/app/jobs/${id.data}?published=1`)');
+    expect(detailLoad).toContain("if (params.has('published')) return 'Job published.';");
   });
 });

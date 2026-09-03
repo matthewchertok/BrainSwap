@@ -1,6 +1,6 @@
 <script lang="ts">
   import { navigating } from '$app/state';
-  import { statusLabel } from '$lib/ui';
+  import JobStatus from '$lib/components/JobStatus.svelte';
   let { data } = $props();
   const tabs = [
     ['open', 'Open jobs'],
@@ -42,9 +42,7 @@
     </section>{:else}<div class="cards">
       {#each data.jobs as job}<article class="card">
           <div class="card-top">
-            <span class="pill">{statusLabel(job.status)}</span><span
-              >{job.visibility === 'claimed_only' ? 'Sealed' : 'Lab-visible'}</span
-            >
+            <JobStatus status={job.status} /><span>{job.visibility === 'claimed_only' ? 'Sealed' : 'Lab-visible'}</span>
           </div>
           <h2><a href={'/app/jobs/' + job.id}>{job.title}</a></h2>
           <p>{job.listing_summary}</p>

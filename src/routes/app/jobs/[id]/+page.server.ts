@@ -135,6 +135,7 @@ async function notify(type: string, jobId: string, membership: ActiveMembership)
 }
 
 function notice(params: URLSearchParams) {
+  if (params.has('published')) return 'Job published.';
   if (params.has('created')) return 'Draft created.';
   if (params.has('saved')) return 'Draft saved.';
   if (params.has('submitted')) return 'Result submitted.';

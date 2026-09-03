@@ -236,6 +236,32 @@ dl {
   font-size: 0.78rem;
   font-weight: 700;
 }
+.job-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  font-weight: 700;
+}
+.job-status-dot {
+  width: 0.7rem;
+  height: 0.7rem;
+  flex: 0 0 auto;
+  border: 1px solid #56615b;
+  border-radius: 50%;
+  background: #89938d;
+}
+.job-status.is-open .job-status-dot {
+  border-color: #805d00;
+  background: #e2aa00;
+}
+.job-status.is-success .job-status-dot {
+  border-color: #176239;
+  background: #38a169;
+}
+.job-status.is-cancelled .job-status-dot {
+  border-color: #81281c;
+  background: #c94a37;
+}
 .empty {
   text-align: center;
   padding: 4rem 1rem;
