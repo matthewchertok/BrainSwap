@@ -154,7 +154,7 @@ For protected/auth responses verify:
 
 - `Content-Security-Policy` permits required SvelteKit/Supabase behavior without console violations and includes frame/object restrictions;
 - `X-Content-Type-Options: nosniff`;
-- `Referrer-Policy: same-origin` and a restrictive `Permissions-Policy`;
+- `Referrer-Policy: same-origin`, a matching document-level referrer policy, and a restrictive `Permissions-Policy`;
 - frame denial; and
 - `Cache-Control: no-store, private` where sensitive/session state is involved.
 

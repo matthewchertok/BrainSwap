@@ -1,3 +1,4 @@
+import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import { contextMarkdown, followUpSnapshot, runnablePrompt } from './prompt';
 import { parseJobForm } from './server/job-form';
@@ -179,5 +180,11 @@ describe('security headers', () => {
     expect(headers.get('X-Content-Type-Options')).toBe('nosniff');
     expect(headers.get('X-Frame-Options')).toBe('DENY');
     expect(headers.get('Permissions-Policy')).toBe('camera=(), microphone=(), geolocation=()');
+  });
+
+  it('keeps the document referrer policy aligned with the response header', () => {
+    const appTemplate = readFileSync(new URL('../app.html', import.meta.url), 'utf8');
+    expect(appTemplate).toContain('<meta name="referrer" content="same-origin" />');
+    expect(appTemplate).not.toContain('<meta name="referrer" content="no-referrer" />');
   });
 });
