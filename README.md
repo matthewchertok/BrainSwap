@@ -4,7 +4,7 @@ BrainSwap is a private, invitation-only task-handoff application for a small res
 
 ## Review status
 
-**Current recommendation: `BLOCK PILOT`.** The local pass completed formatting, Svelte/type checks, lint, 40 unit tests, the heuristic scan, the Cloudflare production build, a fresh database reset, SQL lint, and database-type generation; all 264 pgTAP assertions passed. The reset applied all three migrations and configured the private `job-files` and `profile-photos` buckets. Hosted Google OAuth has completed successfully for the invited bootstrap administrator, but the full authenticated actor matrix, real Storage API behavior, hosted RLS/configuration, cleanup races, and remaining browser acceptance items are still open. Do not use real unpublished research data until the blocking items in [the audit report](docs/audit-report.md) are closed.
+**Current recommendation: `BLOCK PILOT`.** The local pass completed formatting, Svelte/type checks, lint, 41 unit tests, the heuristic scan, the Cloudflare production build, a fresh database reset, SQL lint, and database-type generation; all 266 pgTAP assertions passed. The reset applied all four migrations and configured the private `job-files` and `profile-photos` buckets. Hosted Google OAuth has completed successfully for the invited bootstrap administrator, but the full authenticated actor matrix, real Storage API behavior, hosted RLS/configuration, cleanup races, and remaining browser acceptance items are still open. Do not use real unpublished research data until the blocking items in [the audit report](docs/audit-report.md) are closed.
 
 ## Architecture
 

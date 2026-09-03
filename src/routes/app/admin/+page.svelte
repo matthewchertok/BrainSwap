@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { approvalEmailHref } from '$lib/ui';
+  import { approvalEmailHref, membershipHeading } from '$lib/ui';
 
   let { data, form } = $props();
 </script>
@@ -22,7 +22,7 @@
   <h2>Members</h2>
   <div class="cards">
     {#each data.members as m}<article class="card">
-        <strong>{m.display_name ?? 'Unclaimed invitation'}</strong>
+        <strong>{membershipHeading(m.display_name, m.invited_email)}</strong>
         <p>{m.invited_email} · {m.claimed ? 'Claimed' : 'Unclaimed'}</p>
         <form method="POST" action="?/membership">
           <input type="hidden" name="membership_id" value={m.id} />

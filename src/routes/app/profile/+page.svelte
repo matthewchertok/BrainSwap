@@ -1,9 +1,8 @@
 <script lang="ts">
   import { invalidateAll } from '$app/navigation';
   import { onMount } from 'svelte';
-  import { downloadProfilePhotoUrl, uploadReservedProfilePhoto } from '$lib/storage';
+  import { downloadProfilePhotoUrl } from '$lib/storage';
   import { getBrowserSupabase } from '$lib/supabase-browser';
-  import { validProfilePhoto } from '$lib/validation';
 
   let { data, form } = $props();
   let photoUrl = $state('');
@@ -66,47 +65,12 @@
     }
   }
 
-  async function uploadPhoto(event: Event) {
+  function uploadPhoto(event: Event) {
     const input = event.currentTarget as HTMLInputElement;
     const file = input.files?.[0];
-    input.value = '';
     if (!file) return;
-    if (!validProfilePhoto(file.name, file.type, file.size)) {
-      photoMessage = 'Choose a JPEG, PNG, or WebP image no larger than 5 MiB.';
-      return;
-    }
-    photoBusy = true;
-    photoMessage = '';
-    let reservation: { id: string; storage_path: string } | null = null;
-    try {
-      const client = getBrowserSupabase();
-      const { data: rows, error: reserveError } = await client.rpc('reserve_profile_photo', {
-        p_organization_id: data.organizationId,
-        p_filename: file.name,
-        p_mime_type: file.type,
-        p_size_bytes: file.size
-      });
-      reservation = Array.isArray(rows) ? rows[0] : rows;
-      if (reserveError || !reservation?.id || !reservation.storage_path)
-        throw new Error('The profile photo reservation was rejected.');
-      await uploadReservedProfilePhoto(client, reservation.storage_path, file);
-      const { error: finalizeError } = await client.rpc('finalize_profile_photo', { p_photo_id: reservation.id });
-      if (finalizeError) throw new Error('The profile photo could not be finalized.');
-      photoMessage = 'Profile photo updated.';
-      await invalidateAll();
-      await loadPhoto();
-    } catch (photoError) {
-      if (reservation?.id) {
-        try {
-          await cleanupPhoto(reservation.id, false);
-        } catch {
-          // The visible error already tells the user the upload failed; the reservation remains retryable.
-        }
-      }
-      photoMessage = photoError instanceof Error ? photoError.message : 'The profile photo could not be uploaded.';
-    } finally {
-      photoBusy = false;
-    }
+    photoMessage = `Uploading ${file.name}…`;
+    input.form?.requestSubmit();
   }
 </script>
 
@@ -124,13 +88,15 @@
   <div>
     <h2>Profile photo</h2>
     <p>JPEG, PNG, or WebP. Maximum 5 MiB.</p>
-    <div class="actions profile-photo-actions">
+    <div class="profile-photo-actions">
       {#if data.photo}<button type="button" class="secondary" disabled={photoBusy} onclick={removePhoto}
           >Remove photo</button
-        >{:else}<label class="button file-button">
-          Upload photo
-          <input type="file" accept="image/jpeg,image/png,image/webp" disabled={photoBusy} onchange={uploadPhoto} />
-        </label>{/if}
+        >{:else}<form method="POST" action="?/upload_photo" enctype="multipart/form-data">
+          <label class="button file-button">
+            Upload photo
+            <input type="file" name="photo" accept="image/jpeg,image/png,image/webp" required onchange={uploadPhoto} />
+          </label>
+        </form>{/if}
     </div>
   </div>
 </section>

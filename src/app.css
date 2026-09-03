@@ -247,6 +247,18 @@ dl {
 .card h2 {
   font-size: 1.15rem;
 }
+.job-card-link {
+  color: inherit;
+  text-decoration: none;
+}
+.job-card-link:hover,
+.job-card-link:focus-visible {
+  border-color: var(--accent);
+}
+.job-card-link h2 {
+  color: var(--accent-ink);
+  text-decoration: underline;
+}
 .pill {
   display: inline-block;
   border: 1px solid #779184;

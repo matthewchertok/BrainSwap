@@ -2,7 +2,7 @@ begin;
 
 -- Updated after all assertions are written. Keeping an explicit plan makes CI
 -- fail if a future edit silently drops an adversarial case.
-select plan(264);
+select plan(266);
 
 -- Fixed identities make failures reproducible. Everything is rolled back.
 insert into auth.users(
@@ -439,6 +439,20 @@ select ok((
     and effort = 'medium' and required_tools = '{}'::text[]
   from public.jobs where id = current_setting('brainswap_test.partial_job')::uuid
 ), 'blank drafts retain fixed sealed/general classification without inventing content');
+select is(
+  (select count(*) from public.dashboard_jobs(
+    'aaaaaaaa-0000-0000-0000-000000000001', 'drafts'
+  ) where id = current_setting('brainswap_test.partial_job')::uuid),
+  1::bigint,
+  'requester can open a partial draft from the dedicated drafts dashboard'
+);
+select is(
+  (select count(*) from public.dashboard_jobs(
+    'aaaaaaaa-0000-0000-0000-000000000001', 'requests'
+  ) where id = current_setting('brainswap_test.partial_job')::uuid),
+  0::bigint,
+  'partial drafts never appear in the requester published-job dashboard'
+);
 select throws_ok(
   $$select public.publish_job(current_setting('brainswap_test.partial_job')::uuid)$$,
   'job is incomplete', 'publish remains the authoritative completeness gate for partial drafts'
