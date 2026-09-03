@@ -1,0 +1,14 @@
+import { redirect } from '@sveltejs/kit';
+import { safeReturnPath } from '$lib/validation';
+export const GET = async ({ url, locals }) => {
+  const code = url.searchParams.get('code');
+  if (!code) redirect(303, '/login?error=missing_code');
+  const { error } = await locals.supabase.auth.exchangeCodeForSession(code);
+  if (error) redirect(303, '/login?error=oauth_exchange');
+  const { data, error: claimError } = await locals.supabase.rpc('claim_available_memberships');
+  if (claimError || !data?.length) {
+    await locals.supabase.auth.signOut();
+    redirect(303, '/unauthorized');
+  }
+  redirect(303, safeReturnPath(url.searchParams.get('next')));
+};
