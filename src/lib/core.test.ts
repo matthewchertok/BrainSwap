@@ -551,12 +551,18 @@ describe('UI feedback contracts', () => {
     expect(profile).not.toContain('cleanupPhoto(data.photo.id, false)');
     expect(profileServer).toContain('upload_photo: async');
     expect(profileServer).toContain('save: async');
+    expect(profileServer).toContain('delete_account: async');
+    expect(profileServer).toContain("locals.supabase.rpc('begin_account_deletion')");
+    expect(profileServer).toContain("locals.supabase.rpc('delete_own_account')");
     expect(profileServer).not.toContain('default: async');
     expect(profileServer).toContain(".from('profile-photos')");
     expect(profileServer).toContain('.upload(reservation.storage_path, photo');
     expect(profile).toContain('<form method="POST" action="?/save" class="panel profile-form">');
     expect(profile).toContain('name="bio"');
     expect(profile).toContain('Organization<select disabled');
+    expect(profile).toContain('<h2>Delete account</h2>');
+    expect(profile).toContain('action="?/delete_account"');
+    expect(profile).toContain('disabled={!accountDeletionReady}');
     expect(profile).not.toContain('name="capabilities"');
     expect(admin).not.toContain('<h2>Models</h2>');
     expect(admin).toContain('action="?/delete_invitation"');

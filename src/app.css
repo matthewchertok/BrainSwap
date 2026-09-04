@@ -543,6 +543,22 @@ fieldset input[type='radio'] {
 .profile-form {
   gap: 1.1rem;
 }
+.account-danger-zone {
+  margin-top: 2rem;
+  border-color: #d7a398;
+}
+.account-danger-zone h2 {
+  margin-top: 0;
+  color: #7f2419;
+}
+.account-danger-zone form {
+  display: grid;
+  gap: 0.85rem;
+  margin-top: 1.25rem;
+}
+.account-danger-zone form > button {
+  justify-self: start;
+}
 pre {
   white-space: pre-wrap;
   word-break: break-word;

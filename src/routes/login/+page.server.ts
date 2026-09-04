@@ -17,6 +17,7 @@ export const load: PageServerLoad = ({ url, locals }) => {
 
   return {
     message: authMessages[url.searchParams.get('error') ?? ''] ?? null,
+    notice: url.searchParams.has('deleted') ? 'Your BrainSwap account was deleted.' : null,
     next: safeReturnPath(url.searchParams.get('next')),
     accessRequestsEnabled: accessRequestEmailSettings() !== null
   };

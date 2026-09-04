@@ -8,6 +8,8 @@
   let photoUrl = $state('');
   let photoMessage = $state('');
   let photoBusy = $state(false);
+  let accountConfirmation = $state('');
+  let accountDeletionReady = $derived(accountConfirmation.trim().toLowerCase() === data.accountEmail);
 
   onMount(() => {
     void loadPhoto();
@@ -131,3 +133,28 @@
   >
   <button>Save profile</button>
 </form>
+
+<section class="panel account-danger-zone">
+  <h2>Delete account</h2>
+  <p>
+    This permanently deletes your sign-in, profile, memberships, invitations, and uploaded files. Shared job and result
+    history may remain under “Deleted user.” Open jobs you posted will be cancelled, and work you claimed will be
+    released.
+  </p>
+  <p>You cannot delete your account while you are an organization’s last active administrator.</p>
+  <form method="POST" action="?/delete_account">
+    <label>
+      Type <strong>{data.accountEmail}</strong> to confirm
+      <input
+        name="confirmation"
+        autocomplete="off"
+        autocapitalize="none"
+        spellcheck="false"
+        bind:value={accountConfirmation}
+        required
+      />
+    </label>
+    {#if form?.deleteError}<p class="error" role="alert">{form.deleteError}</p>{/if}
+    <button class="danger-button" disabled={!accountDeletionReady}>Delete my account</button>
+  </form>
+</section>

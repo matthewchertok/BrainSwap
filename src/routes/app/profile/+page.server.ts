@@ -1,11 +1,28 @@
 import { error, fail, redirect } from '@sveltejs/kit';
 import { requireSelectedMembership } from '$lib/server/membership';
 import { profileSchema, validProfilePhoto } from '$lib/validation';
+import { z } from 'zod';
 import type { Actions } from './$types';
+
+const deletionManifestSchema = z.array(
+  z.object({
+    bucket_id: z.enum(['job-files', 'profile-photos']),
+    storage_path: z.string().min(1).max(1024)
+  })
+);
+
+function accountDeletionMessage(message: string | undefined) {
+  if (message?.includes('transfer administrator role'))
+    return 'Assign another active administrator in every organization before deleting your account.';
+  if (message?.includes('storage cleanup'))
+    return 'Stored files could not be fully removed. It is safe to try account deletion again.';
+  return 'Your sign-in is still active, but some uploaded files may already be removed. It is safe to try again.';
+}
+
 export const load = async ({ locals, parent, url }) => {
   const { membership } = await parent();
   if (!membership) error(409, 'Select an organization first.');
-  const [modelsResult, selectedResult, profileResult, photoResult] = await Promise.all([
+  const [modelsResult, selectedResult, profileResult, photoResult, userResult] = await Promise.all([
     locals.supabase
       .from('models')
       .select('id,display_name')
@@ -24,9 +41,18 @@ export const load = async ({ locals, parent, url }) => {
       .select('id,mime_type,size_bytes,upload_status,cleanup_started_at')
       .eq('membership_id', membership.membership_id)
       .eq('organization_id', membership.organization_id)
-      .maybeSingle()
+      .maybeSingle(),
+    locals.supabase.auth.getUser()
   ]);
-  if (modelsResult.error || selectedResult.error || profileResult.error || photoResult.error || !profileResult.data)
+  if (
+    modelsResult.error ||
+    selectedResult.error ||
+    profileResult.error ||
+    photoResult.error ||
+    userResult.error ||
+    !profileResult.data ||
+    !userResult.data.user?.email
+  )
     error(503, 'Profile data is temporarily unavailable.');
   return {
     models: modelsResult.data ?? [],
@@ -36,6 +62,7 @@ export const load = async ({ locals, parent, url }) => {
     membershipId: membership.membership_id,
     organizationId: membership.organization_id,
     organizationName: membership.organization_name,
+    accountEmail: userResult.data.user.email.toLowerCase(),
     notice:
       url.searchParams.get('photo') === 'uploaded'
         ? 'Profile photo updated.'
@@ -112,5 +139,51 @@ export const actions: Actions = {
     });
     if (updateError) return fail(400, { message: 'The profile could not be saved.' });
     redirect(303, '/app/profile?saved=1');
+  },
+  delete_account: async ({ request, locals, cookies, url }) => {
+    await requireSelectedMembership(locals, cookies, url);
+    const form = await request.formData();
+    const { data: userData, error: userError } = await locals.supabase.auth.getUser();
+    const email = userData.user?.email?.trim().toLowerCase();
+    const confirmation = form.get('confirmation');
+    if (userError || !email) return fail(401, { deleteError: 'Your signed-in account could not be verified.' });
+    if (typeof confirmation !== 'string' || confirmation.trim().toLowerCase() !== email)
+      return fail(400, { deleteError: 'Type your full email address exactly to confirm account deletion.' });
+
+    const { data: manifestRows, error: beginError } = await locals.supabase.rpc('begin_account_deletion');
+    if (beginError) return fail(409, { deleteError: accountDeletionMessage(beginError.message) });
+    const manifest = deletionManifestSchema.safeParse(manifestRows ?? []);
+    if (!manifest.success)
+      return fail(503, { deleteError: 'The file cleanup manifest was invalid. Contact the lab administrator.' });
+
+    const pathsByBucket = new Map<string, Set<string>>();
+    for (const item of manifest.data) {
+      const paths = pathsByBucket.get(item.bucket_id) ?? new Set<string>();
+      paths.add(item.storage_path);
+      pathsByBucket.set(item.bucket_id, paths);
+    }
+    for (const [bucket, pathSet] of pathsByBucket) {
+      const paths = [...pathSet];
+      for (let index = 0; index < paths.length; index += 1000) {
+        const { error: removeError } = await locals.supabase.storage
+          .from(bucket)
+          .remove(paths.slice(index, index + 1000));
+        if (removeError)
+          return fail(503, {
+            deleteError: 'Stored files could not be fully removed. It is safe to try account deletion again.'
+          });
+      }
+    }
+
+    const { error: deleteError } = await locals.supabase.rpc('delete_own_account');
+    if (deleteError) return fail(409, { deleteError: accountDeletionMessage(deleteError.message) });
+
+    await locals.supabase.auth.signOut({ scope: 'local' });
+    for (const cookie of cookies.getAll()) {
+      if (cookie.name.startsWith('sb-') && cookie.name.includes('-auth-token'))
+        cookies.delete(cookie.name, { path: '/' });
+    }
+    cookies.delete('brainswap_org', { path: '/app' });
+    redirect(303, '/login?deleted=1');
   }
 };

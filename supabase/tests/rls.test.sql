@@ -230,7 +230,7 @@ select ok(not exists(
       'delete_file_record','begin_job_deletion','delete_job_after_storage_cleanup',
       'reserve_profile_photo','finalize_profile_photo',
       'profile_photo_download_info','profile_photo_cleanup_info',
-      'delete_profile_photo_record'
+      'delete_profile_photo_record','begin_account_deletion','delete_own_account'
     ])
     and acl.privilege_type = 'EXECUTE'
     and (acl.grantee = 0 or grantee.rolname = 'anon')
@@ -250,7 +250,7 @@ select ok(
   (select count(*)
    from pg_proc p join pg_namespace n on n.oid = p.pronamespace
        where n.nspname = 'private'
-     and has_function_privilege('authenticated', p.oid, 'EXECUTE')) = 15
+     and has_function_privilege('authenticated', p.oid, 'EXECUTE')) = 17
   and (select count(*)
        from pg_proc p join pg_namespace n on n.oid = p.pronamespace
        where n.nspname = 'private'
@@ -270,8 +270,10 @@ select ok(
            to_regprocedure('private.can_read_profile_photo(uuid)'),
            to_regprocedure('private.can_profile_photo_storage_upload(text,jsonb)'),
            to_regprocedure('private.can_profile_photo_storage_download(text)'),
-           to_regprocedure('private.can_profile_photo_storage_delete(text)')
-         ])) = 15
+           to_regprocedure('private.can_profile_photo_storage_delete(text)'),
+           to_regprocedure('private.account_deletion_started()'),
+           to_regprocedure('private.can_delete_account_storage_object(text,text)')
+         ])) = 17
   and not exists(
     select 1
     from pg_proc p
