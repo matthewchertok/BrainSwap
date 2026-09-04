@@ -274,6 +274,7 @@ export type Database = {
         Row: {
           created_at: string;
           current_task: string;
+          helper_instructions: string;
           job_id: string;
           output_format: string;
           prompt: string;
@@ -283,6 +284,7 @@ export type Database = {
         Insert: {
           created_at?: string;
           current_task: string;
+          helper_instructions?: string;
           job_id: string;
           output_format: string;
           prompt?: string;
@@ -292,6 +294,7 @@ export type Database = {
         Update: {
           created_at?: string;
           current_task?: string;
+          helper_instructions?: string;
           job_id?: string;
           output_format?: string;
           prompt?: string;

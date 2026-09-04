@@ -19,10 +19,20 @@ export const load = async ({ locals, params, url, parent }) => {
   if (jobError || !job) error(404, 'Job not found or not available');
   const { data, error: workspaceError } = await locals.supabase.rpc('job_workspace', { p_job_id: id.data });
   if (workspaceError || !data) error(404, 'Job not found or not available');
+  if (data.payload) {
+    const { data: payload, error: payloadError } = await locals.supabase
+      .from('job_payloads')
+      .select('helper_instructions')
+      .eq('job_id', id.data)
+      .maybeSingle();
+    if (payloadError || !payload) error(503, 'The protected job workspace could not be loaded.');
+    data.payload.helper_instructions = payload.helper_instructions;
+  }
   return {
     workspace: data,
     notice: notice(url.searchParams),
-    publishError: url.searchParams.has('publish_error')
+    publishError: url.searchParams.has('publish_error'),
+    attachmentError: url.searchParams.has('attachment_error')
   };
 };
 

@@ -5,7 +5,7 @@
   import { downloadPrivateFile, uploadReservedFile } from '$lib/storage';
   import { getBrowserSupabase } from '$lib/supabase-browser';
   import { dateTimeLocalToIso, isoToDateTimeLocal } from '$lib/ui';
-  import { JOB_TOOLS, REASONING_EFFORTS, validFile } from '$lib/validation';
+  import { REASONING_EFFORTS, validFile, validJobAttachmentZip } from '$lib/validation';
 
   let { data, form } = $props();
   let w = $derived(data.workspace);
@@ -21,10 +21,10 @@
   let draftTitle = $state('');
   let draftTaskSummary = $state('');
   let draftPrompt = $state('');
+  let draftHelperInstructions = $state('');
   let draftChatUrl = $state('');
   let draftPreferredModel = $state('');
   let draftAcceptableModels = $state('');
-  let draftTools = $state<string[]>([]);
   let resultModel = $state('');
   let resultResponse = $state('');
   let resultNotes = $state('');
@@ -49,10 +49,10 @@
     draftTitle = w.job.title ?? '';
     draftTaskSummary = w.payload?.task_summary ?? w.job.listing_summary ?? '';
     draftPrompt = w.payload?.prompt ?? w.payload?.success_criteria ?? '';
+    draftHelperInstructions = w.payload?.helper_instructions ?? '';
     draftChatUrl = chatUrl();
     draftPreferredModel = w.job.preferred_model_text ?? '';
     draftAcceptableModels = w.job.acceptable_models_text ?? '';
-    draftTools = [...(w.job.required_tools ?? [])];
     reasoningEffort = w.editable_submission?.reasoning_effort ?? 'medium';
     reasoningEffortOther = w.editable_submission?.reasoning_effort_other ?? '';
     resultModel = w.editable_submission?.model_used_text ?? '';
@@ -74,8 +74,15 @@
     const file = input.files?.[0];
     input.value = '';
     if (!file) return;
-    if (!validFile(file.name, file.type, file.size)) {
-      fileMessage = 'Choose an allowlisted file no larger than 25 MiB.';
+    const valid =
+      kind === 'job'
+        ? validJobAttachmentZip(file.name, file.type, file.size)
+        : validFile(file.name, file.type, file.size);
+    if (!valid) {
+      fileMessage =
+        kind === 'job'
+          ? 'Choose one ZIP file no larger than 25 MiB.'
+          : 'Choose an allowlisted file no larger than 25 MiB.';
       return;
     }
     busy = true;
@@ -97,7 +104,7 @@
       if (reserveError) throw new Error('The file reservation was rejected.');
       reservation = Array.isArray(reserved) ? reserved[0] : reserved;
       if (!reservation?.id || !reservation.storage_path) throw new Error('The file reservation was incomplete.');
-      await uploadReservedFile(client, reservation.storage_path, file);
+      await uploadReservedFile(client, reservation.storage_path, file, kind);
       const { error: finalizeError } = await client.rpc(finalizeName, { p_file_id: reservation.id });
       if (finalizeError) throw new Error('The uploaded file could not be finalized.');
       if (kind === 'job') jobFileDescription = '';
@@ -234,6 +241,14 @@
     );
   }
 
+  function jobAttachmentExists() {
+    return Boolean(
+      w.files?.length ||
+      (w.pending_files ?? []).some((file: { kind: string }) => file.kind === 'job') ||
+      uploadingFile?.kind === 'job'
+    );
+  }
+
   function recoverySubmissionFiles() {
     if (w.permissions.submit || w.permissions.edit_submission) return [];
     return (w.pending_files ?? []).filter(
@@ -249,6 +264,9 @@
 {#if form?.message}<p class="error" role="alert">{form.message}</p>{/if}
 {#if data.notice}<p class="notice">{data.notice}</p>{/if}
 {#if data.publishError}<p class="error">The draft was saved, but it was not published. Review it and try again.</p>{/if}
+{#if data.attachmentError}<p class="error">
+    The draft was saved, but the ZIP attachment could not be uploaded. Add it below and try again.
+  </p>{/if}
 {#if w.job.deletion_pending}<p class="error">
     Job deletion is incomplete. Individual file controls are disabled; use Retry deletion below.
   </p>{/if}
@@ -270,10 +288,6 @@
     <div>
       <dt>Deadline</dt>
       <dd>{w.job.deadline ? new Date(w.job.deadline).toLocaleString() : 'None'}</dd>
-    </div>
-    <div>
-      <dt>Required tools</dt>
-      <dd>{w.job.required_tools?.join(', ') || 'None'}</dd>
     </div>
     <div>
       <dt>Preferred model</dt>
@@ -302,20 +316,43 @@
   {#if w.permissions.update}
     <form id="draft-editor" method="POST" action="?/update" class="job-form panel draft-editor">
       <h2>Edit draft</h2>
-      <label>Title<input name="title" bind:value={draftTitle} maxlength="120" /></label>
       <label
-        >Task summary<textarea name="task_summary" rows="4" maxlength="1000" bind:value={draftTaskSummary}
-        ></textarea></label
+        >Title<input name="title" bind:value={draftTitle} maxlength="120" placeholder="The name of this task" /></label
       >
-      <label>Prompt<textarea name="prompt" rows="10" maxlength="100000" bind:value={draftPrompt}></textarea></label>
       <label
-        >Link to chat (optional)<input
+        >Task summary<textarea
+          name="task_summary"
+          rows="4"
+          maxlength="1000"
+          bind:value={draftTaskSummary}
+          placeholder="A brief description of what this task is about"></textarea></label
+      >
+      <label
+        >Prompt<textarea
+          name="prompt"
+          rows="10"
+          maxlength="100000"
+          bind:value={draftPrompt}
+          placeholder="The complete instruction set for the helper to give their model"></textarea></label
+      >
+      <label
+        >Link to chat<input
           type="url"
           name="chat_url"
           bind:value={draftChatUrl}
           maxlength="2048"
           placeholder="https://chatgpt.com/share/…"
+          required
         /></label
+      >
+      <label
+        >Instructions to user (optional)<textarea
+          name="helper_instructions"
+          rows="5"
+          maxlength="25000"
+          bind:value={draftHelperInstructions}
+          placeholder="How to unzip attachments, other notes, or anything else the helper should know"
+        ></textarea></label
       >
       <label
         >Preferred model<input
@@ -333,12 +370,6 @@
           placeholder="Any frontier model"
         /></label
       >
-      <fieldset>
-        <legend>Required tools (optional)</legend>
-        {#each JOB_TOOLS as tool}<label
-            ><input type="checkbox" name="required_tools" value={tool} bind:group={draftTools} />{tool}</label
-          >{/each}
-      </fieldset>
       <label
         >Deadline (optional)<input
           type="datetime-local"
@@ -350,22 +381,26 @@
       >
       <input type="hidden" name="deadline" value={deadlineIso} />
       <p id="edit-deadline-help" class="field-help">Choose the date and time in your device’s local timezone.</p>
-      <button name="intent" value="draft" class="status-button" formnovalidate>
-        <span class="status-dot is-draft" aria-hidden="true"></span>
-        Save draft
-      </button>
     </form>
 
     <section class="panel attachment-panel">
-      <h2>Attach relevant files</h2>
-      <p>Maximum 25 MiB per file and 100 MiB total.</p>
-      <label>Description<input bind:value={jobFileDescription} maxlength="1000" /></label>
-      <label>File<input type="file" disabled={busy} onchange={(event) => upload(event, 'job')} /></label>
+      <h2>Required attachments</h2>
+      <p>Put all attachments in one ZIP file. Maximum size: 25 MiB.</p>
+      <label>Description (optional)<input bind:value={jobFileDescription} maxlength="1000" /></label>
+      <label
+        >ZIP file<input
+          type="file"
+          accept=".zip,application/zip,application/x-zip-compressed"
+          disabled={busy || jobAttachmentExists()}
+          onchange={(event) => upload(event, 'job')}
+        /></label
+      >
+      {#if jobAttachmentExists()}<p class="field-help">Remove the current ZIP before uploading a replacement.</p>{/if}
 
       {#if w.files?.length || (w.pending_files ?? []).some((file: { kind: string }) => file.kind === 'job') || uploadingFile?.kind === 'job'}
         <div class="table-wrap">
           <table class="file-table">
-            <thead><tr><th>File</th><th>Description</th><th>Status</th><th>Actions</th></tr></thead>
+            <thead><tr><th>ZIP file</th><th>Description</th><th>Status</th><th>Actions</th></tr></thead>
             <tbody>
               {#each w.files ?? [] as file}<tr>
                   <td>{file.original_filename}</td><td>{file.description || '—'}</td><td>Uploaded</td><td>
@@ -412,9 +447,15 @@
       {/if}
     </section>
 
-    {#if w.permissions.publish}<div class="standalone-action">
-        <button type="submit" form="draft-editor" name="intent" value="publish">Publish job</button>
-      </div>{/if}
+    <div class="actions standalone-action">
+      <button type="submit" form="draft-editor" name="intent" value="draft" class="status-button" formnovalidate>
+        <span class="status-dot is-draft" aria-hidden="true"></span>
+        Save draft
+      </button>
+      {#if w.permissions.publish}<button type="submit" form="draft-editor" name="intent" value="publish"
+          >Publish job</button
+        >{/if}
+    </div>
   {/if}
 
   {#if !w.payload}<section class="panel private-job">
@@ -432,8 +473,13 @@
           <a href={chatUrl()} target="_blank" rel="noopener noreferrer">Open shared chat</a>
         </section>{/if}
 
+      {#if w.payload.helper_instructions}<section class="workspace-section">
+          <h2>Instructions to user</h2>
+          <pre>{w.payload.helper_instructions}</pre>
+        </section>{/if}
+
       {#if w.files?.length}<section class="workspace-section">
-          <h2>Relevant files</h2>
+          <h2>Required attachments</h2>
           <div class="table-wrap">
             <table class="file-table">
               <thead><tr><th>File</th><th>Description</th><th>Action</th></tr></thead>
@@ -640,7 +686,7 @@
         <button>Request revision</button>
       </form>{/if}
     <div class="actions workflow-buttons">
-      {#if w.permissions.cancel}<form method="POST" action="?/cancel">
+      {#if w.permissions.cancel && w.job.status !== 'cancelled'}<form method="POST" action="?/cancel">
           <button class="danger-button">Cancel job</button>
         </form>{/if}
       {#if w.permissions.reopen}<form method="POST" action="?/reopen"><button>Reopen job</button></form>{/if}
