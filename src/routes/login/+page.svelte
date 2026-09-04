@@ -30,8 +30,5 @@
     {/if}
     {#if data.message}<p class="error" role="alert">{data.message}</p>{/if}
     {#if form?.message}<p class="error" role="alert">{form.message}</p>{/if}
-    <p class="notice">
-      <strong>Data boundary:</strong> Do not submit anything sensitive or anything you would not want someone else to see.
-    </p>
   </section>
 </main>

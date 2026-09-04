@@ -28,6 +28,7 @@ import {
   jobSchema,
   submissionSchema
 } from './validation';
+import { AUTH_COOKIE_MAX_AGE_SECONDS, authCookieOptions } from './auth-session';
 import {
   approvalEmailHref,
   claimExpired,
@@ -420,9 +421,26 @@ describe('UI feedback contracts', () => {
     const styles = readFileSync(new URL('../app.css', import.meta.url), 'utf8');
     expect(login).toContain('<p class="eyebrow">{brand.version}</p>');
     expect(login).toContain('<form method="POST" action="?/requestAccess">');
-    expect(login).toContain('Do not submit anything sensitive');
+    expect(login).not.toContain('Data boundary:');
+    expect(login).not.toContain('Do not submit anything sensitive');
     expect(styles).toContain('--accent: #e77500;');
     expect(styles).not.toContain('--green:');
+  });
+
+  it('persists browser sessions and renews a durable auth cookie', () => {
+    const browserClient = readFileSync(new URL('./supabase-browser.ts', import.meta.url), 'utf8');
+    const serverHook = readFileSync(new URL('../hooks.server.ts', import.meta.url), 'utf8');
+    expect(browserClient).toContain('persistSession: true');
+    expect(browserClient).toContain('autoRefreshToken: true');
+    expect(browserClient).toContain('cookieOptions: authCookieOptions');
+    expect(serverHook).toContain('cookieOptions: authCookieOptions');
+    expect(AUTH_COOKIE_MAX_AGE_SECONDS).toBe(400 * 24 * 60 * 60);
+    expect(authCookieOptions(true)).toEqual({
+      path: '/',
+      sameSite: 'lax',
+      secure: true,
+      maxAge: AUTH_COOKIE_MAX_AGE_SECONDS
+    });
   });
 
   it('uses a human email label and offers a manual approval message for unclaimed invitations', () => {
