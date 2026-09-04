@@ -537,4 +537,15 @@ describe('UI feedback contracts', () => {
     );
     expect(migration).toContain('set edit_locked_at = coalesce(submission.edit_locked_at, parent.requester_action_at)');
   });
+
+  it('authorizes profile uploads using the live Storage preflight metadata shape', () => {
+    const migration = readFileSync(
+      new URL('../../supabase/migrations/202609030005_profile_photo_storage_preflight.sql', import.meta.url),
+      'utf8'
+    );
+    expect(migration).toContain("p_metadata ->> 'mimetype'");
+    expect(migration).toContain("private bucket's 5 MiB file limit");
+    expect(migration).toContain('finalize_profile_photo verify');
+    expect(migration).toContain('grant execute on function private.can_profile_photo_storage_upload');
+  });
 });
