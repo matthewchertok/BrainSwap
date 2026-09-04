@@ -430,10 +430,14 @@ describe('UI feedback contracts', () => {
   it('persists browser sessions and renews a durable auth cookie', () => {
     const browserClient = readFileSync(new URL('./supabase-browser.ts', import.meta.url), 'utf8');
     const serverHook = readFileSync(new URL('../hooks.server.ts', import.meta.url), 'utf8');
+    const rootRoute = readFileSync(new URL('../routes/+page.server.ts', import.meta.url), 'utf8');
+    const loginRoute = readFileSync(new URL('../routes/login/+page.server.ts', import.meta.url), 'utf8');
     expect(browserClient).toContain('persistSession: true');
     expect(browserClient).toContain('autoRefreshToken: true');
     expect(browserClient).toContain('cookieOptions: authCookieOptions');
     expect(serverHook).toContain('cookieOptions: authCookieOptions');
+    expect(rootRoute).toContain("locals.userId ? '/app' : '/login'");
+    expect(loginRoute).toContain('if (locals.userId) redirect(303, safeReturnPath');
     expect(AUTH_COOKIE_MAX_AGE_SECONDS).toBe(400 * 24 * 60 * 60);
     expect(authCookieOptions(true)).toEqual({
       path: '/',

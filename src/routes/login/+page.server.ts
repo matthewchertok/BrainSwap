@@ -12,11 +12,15 @@ const authMessages: Record<string, string> = {
     "Sign-out could not be confirmed. Clear this site's browser data, close the browser, and contact the lab operator."
 };
 
-export const load: PageServerLoad = ({ url }) => ({
-  message: authMessages[url.searchParams.get('error') ?? ''] ?? null,
-  next: safeReturnPath(url.searchParams.get('next')),
-  accessRequestsEnabled: accessRequestEmailSettings() !== null
-});
+export const load: PageServerLoad = ({ url, locals }) => {
+  if (locals.userId) redirect(303, safeReturnPath(url.searchParams.get('next')));
+
+  return {
+    message: authMessages[url.searchParams.get('error') ?? ''] ?? null,
+    next: safeReturnPath(url.searchParams.get('next')),
+    accessRequestsEnabled: accessRequestEmailSettings() !== null
+  };
+};
 
 async function startGoogleOAuth(
   locals: App.Locals,
