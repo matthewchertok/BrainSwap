@@ -899,11 +899,14 @@ select lives_ok(
 select ok(
   position('portrait name.png' in current_setting('brainswap_test.photo_path'))=0
   and private.can_profile_photo_storage_upload(
-    current_setting('brainswap_test.photo_path'),'{"size":4,"mimetype":"image/png"}'::jsonb
+    current_setting('brainswap_test.photo_path'),'{"mimetype":"image/png"}'::jsonb
+  )
+  and private.can_profile_photo_storage_upload(
+    current_setting('brainswap_test.photo_path'),'{"contentLength":333,"mimetype":"image/png"}'::jsonb
   )
   and not private.can_profile_photo_storage_upload(
-    current_setting('brainswap_test.photo_path'),'{"size":5,"mimetype":"image/png"}'::jsonb
-  ), 'profile photo path is randomized and accepts only exact reserved metadata'
+    current_setting('brainswap_test.photo_path'),'{"contentLength":333,"mimetype":"image/jpeg"}'::jsonb
+  ), 'profile photo path is randomized and accepts only the owner and reserved MIME during Storage preflight'
 );
 reset role;
 
@@ -911,7 +914,7 @@ set local role authenticated;
 set local "request.jwt.claim.sub" = '10000000-0000-0000-0000-000000000003';
 select ok(
   not private.can_profile_photo_storage_upload(
-    current_setting('brainswap_test.photo_path'),'{"size":4,"mimetype":"image/png"}'::jsonb
+    current_setting('brainswap_test.photo_path'),'{"contentLength":4,"mimetype":"image/png"}'::jsonb
   )
   and not private.can_profile_photo_storage_delete(current_setting('brainswap_test.photo_path')),
   'another organization member cannot use or delete the owner reservation'
