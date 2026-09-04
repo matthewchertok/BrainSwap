@@ -1,5 +1,6 @@
 import { createServerClient } from '@supabase/ssr';
 import { env } from '$env/dynamic/public';
+import { authCookieOptions } from '$lib/auth-session';
 import { applyBaselineSecurityHeaders } from '$lib/server/security-headers';
 import type { Handle } from '@sveltejs/kit';
 export const handle: Handle = async ({ event, resolve }) => {
@@ -12,6 +13,7 @@ export const handle: Handle = async ({ event, resolve }) => {
   if (parsedSupabaseUrl.protocol !== 'https:' && !(parsedSupabaseUrl.protocol === 'http:' && localSupabase))
     throw new Error('PUBLIC_SUPABASE_URL must use HTTPS, except for localhost development.');
   event.locals.supabase = createServerClient(supabaseUrl, publishableKey, {
+    cookieOptions: authCookieOptions(event.url.protocol === 'https:'),
     cookies: {
       getAll: () => event.cookies.getAll(),
       setAll: (items) =>
