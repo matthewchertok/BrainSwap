@@ -25,13 +25,14 @@ export const actions: Actions = {
       return fail(503, { message: 'Access requests are temporarily unavailable. Please try again later.' });
 
     const { data, error } = await locals.supabase.auth.getUser();
-    const requesterEmail = error ? null : verifiedPrimaryGoogleEmail(data.user);
-    if (!requesterEmail)
+    const authUser = error ? null : data.user;
+    const requesterEmail = verifiedPrimaryGoogleEmail(authUser);
+    if (!requesterEmail || !authUser)
       return fail(401, {
         message: 'Your Google session could not be verified. Please return to sign in and try again.'
       });
 
-    const delivery = await sendAccessRequestEmail(requesterEmail);
+    const delivery = await sendAccessRequestEmail(requesterEmail, authUser.id);
     if (delivery !== 'sent') return fail(502, { message: 'Your access request could not be sent. Please try again.' });
 
     await endSession(locals);

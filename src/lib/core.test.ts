@@ -282,6 +282,8 @@ describe('security headers', () => {
 });
 
 describe('access request email', () => {
+  const authUserId = '11111111-1111-4111-8111-111111111111';
+  const recreatedAuthUserId = '22222222-2222-4222-8222-222222222222';
   const settings: AccessRequestEmailSettings = {
     apiKey: 'test-only-api-key',
     recipient: 'operator@example.com',
@@ -315,11 +317,14 @@ describe('access request email', () => {
     ).toBeNull();
   });
 
-  it('creates a stable hashed idempotency key without exposing the email', async () => {
-    const first = await accessRequestIdempotencyKey('requester@example.com', settings);
-    const retry = await accessRequestIdempotencyKey('requester@example.com', settings);
+  it('deduplicates one auth identity while allowing a recreated account to request again', async () => {
+    const first = await accessRequestIdempotencyKey('requester@example.com', authUserId, settings);
+    const retry = await accessRequestIdempotencyKey('requester@example.com', authUserId, settings);
+    const recreated = await accessRequestIdempotencyKey('requester@example.com', recreatedAuthUserId, settings);
     expect(first).toBe(retry);
+    expect(recreated).not.toBe(first);
     expect(first).not.toContain('requester');
+    expect(first).not.toContain(authUserId);
     expect(first.length).toBeLessThan(256);
   });
 
@@ -332,7 +337,9 @@ describe('access request email', () => {
       return new Response(JSON.stringify({ id: 'test-message-id' }), { status: 200 });
     }) as typeof fetch;
 
-    await expect(deliverAccessRequestEmail('requester@example.com', settings, { fetcher })).resolves.toBe('sent');
+    await expect(deliverAccessRequestEmail('requester@example.com', authUserId, settings, { fetcher })).resolves.toBe(
+      'sent'
+    );
 
     const headers = new Headers(capturedInit?.headers);
     const payload = JSON.parse(String(capturedInit?.body));
@@ -354,7 +361,10 @@ describe('access request email', () => {
       called = true;
       return new Response(null, { status: 200 });
     }) as typeof fetch;
-    await expect(deliverAccessRequestEmail('invalid', settings, { fetcher })).resolves.toBe('failed');
+    await expect(deliverAccessRequestEmail('invalid', authUserId, settings, { fetcher })).resolves.toBe('failed');
+    await expect(deliverAccessRequestEmail('requester@example.com', 'invalid', settings, { fetcher })).resolves.toBe(
+      'failed'
+    );
     expect(called).toBe(false);
   });
 });
@@ -435,8 +445,8 @@ describe('UI feedback contracts', () => {
     expect(page).toContain('Access requested. An administrator will review your request');
     expect(page).toContain('<button class="secondary">Return to sign in</button>');
     expect(page).not.toContain('Clear sign-in session');
-    expect(server).toContain('verifiedPrimaryGoogleEmail(data.user)');
-    expect(server).toContain('sendAccessRequestEmail(requesterEmail)');
+    expect(server).toContain('verifiedPrimaryGoogleEmail(authUser)');
+    expect(server).toContain('sendAccessRequestEmail(requesterEmail, authUser.id)');
     expect(server).toContain("redirect(303, '/unauthorized?request=sent')");
   });
 

@@ -22,9 +22,10 @@ export const GET = async ({ url, locals }) => {
   let requestStatus: 'sent' | 'failed' = 'failed';
   if (url.searchParams.get('intent') === 'request_access') {
     const { data: authData, error: userError } = await locals.supabase.auth.getUser();
-    const requesterEmail = userError ? null : verifiedPrimaryGoogleEmail(authData.user);
-    if (requesterEmail) {
-      const delivery = await sendAccessRequestEmail(requesterEmail);
+    const authUser = userError ? null : authData.user;
+    const requesterEmail = verifiedPrimaryGoogleEmail(authUser);
+    if (requesterEmail && authUser) {
+      const delivery = await sendAccessRequestEmail(requesterEmail, authUser.id);
       requestStatus = delivery === 'sent' ? 'sent' : 'failed';
     }
   }
