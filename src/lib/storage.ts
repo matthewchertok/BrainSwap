@@ -1,10 +1,20 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
-import { safeFilename, validFile } from './validation';
-export async function uploadReservedFile(client: SupabaseClient, path: string, file: File) {
-  if (!validFile(file.name, file.type, file.size)) throw new Error('Unsupported filename, file type, or size.');
+import { safeFilename, validFile, validJobAttachmentZip } from './validation';
+export async function uploadReservedFile(
+  client: SupabaseClient,
+  path: string,
+  file: File,
+  kind: 'job' | 'submission' = 'submission'
+) {
+  const valid =
+    kind === 'job'
+      ? validJobAttachmentZip(file.name, file.type, file.size)
+      : validFile(file.name, file.type, file.size);
+  if (!valid) throw new Error('Unsupported filename, file type, or size.');
+  const body = await file.arrayBuffer();
   const { error } = await client.storage
     .from('job-files')
-    .upload(path, file, { contentType: file.type, upsert: false });
+    .upload(path, body, { contentType: file.type, upsert: false });
   if (error) throw new Error('The reserved file upload failed.');
 }
 export async function downloadPrivateFile(client: SupabaseClient, path: string, filename: string) {

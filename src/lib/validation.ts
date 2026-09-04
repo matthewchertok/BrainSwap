@@ -10,15 +10,6 @@ const preservedOptional = (max: number) =>
     .string()
     .max(max)
     .transform((value) => (value.trim().length ? value : ''));
-export const JOB_TOOLS = [
-  'Web access',
-  'Deep research',
-  'Code execution',
-  'Image understanding',
-  'PDF understanding',
-  'File generation',
-  'Other'
-] as const;
 export const PROFILE_MODELS = [
   'GPT-6 Astra',
   'GPT-5.6 Sol',
@@ -38,11 +29,11 @@ const jobShape = z.object({
   title: z.string().trim().max(120),
   task_summary: z.string().trim().max(1000),
   prompt: preservedOptional(100000).default(''),
+  helper_instructions: preservedOptional(25000).default(''),
   chat_url: z.string().trim().max(2048).default(''),
   preferred_model_text: z.string().trim().max(200),
   acceptable_models_text: z.string().trim().max(1000),
-  deadline: absoluteDeadline,
-  required_tools: z.array(z.enum(JOB_TOOLS)).max(JOB_TOOLS.length).refine(unique, 'Choose each tool once.')
+  deadline: absoluteDeadline
 });
 
 export const jobDraftSchema = jobShape.superRefine((data, context) => {
@@ -61,6 +52,7 @@ export const jobPublishSchema = jobShape.superRefine((data, context) => {
     ['title', data.title],
     ['task_summary', data.task_summary],
     ['prompt', data.prompt],
+    ['chat_url', data.chat_url],
     ['preferred_model_text', data.preferred_model_text]
   ] as const) {
     if (!value.trim())
@@ -194,18 +186,19 @@ export function safeFilename(name: string) {
   return `${stem}${ext}`;
 }
 export function validFile(name: string, mime: string, size: number) {
-  if (
-    name.length < 1 ||
-    name.length > 255 ||
-    name !== name.trim() ||
-    name.startsWith('.') ||
-    name.includes('/') ||
-    name.includes('\\') ||
-    hasUnsafeAscii(name)
-  )
-    return false;
+  if (!validUploadFilename(name)) return false;
   const ext = name.match(/\.([A-Za-z0-9]+)$/)?.[1]?.toLowerCase() ?? '';
   return size > 0 && size <= 25 * 1024 * 1024 && !!allowedFiles[ext]?.includes(mime);
+}
+export function validJobAttachmentZip(name: string, mime: string, size: number) {
+  if (!validUploadFilename(name)) return false;
+  const ext = name.match(/\.([A-Za-z0-9]+)$/)?.[1]?.toLowerCase() ?? '';
+  return (
+    ext === 'zip' &&
+    ['application/zip', 'application/x-zip-compressed'].includes(mime) &&
+    size > 0 &&
+    size <= 25 * 1024 * 1024
+  );
 }
 export function validProfilePhoto(name: string, mime: string, size: number) {
   if (!validFile(name, mime, size) || size > 5 * 1024 * 1024) return false;
@@ -221,4 +214,16 @@ function hasUnsafeAscii(value: string) {
     const code = character.charCodeAt(0);
     return code <= 32 || code === 127;
   });
+}
+
+function validUploadFilename(name: string) {
+  return !(
+    name.length < 1 ||
+    name.length > 255 ||
+    name !== name.trim() ||
+    name.startsWith('.') ||
+    name.includes('/') ||
+    name.includes('\\') ||
+    hasUnsafeAscii(name)
+  );
 }

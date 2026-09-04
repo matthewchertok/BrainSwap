@@ -11,13 +11,13 @@ export function parseJobForm(form: FormData, intent: JobIntent = 'publish') {
     title: form.get('title'),
     task_summary: form.get('task_summary'),
     prompt: form.get('prompt'),
+    helper_instructions: form.get('helper_instructions') ?? '',
     chat_url: form.get('chat_url') ?? '',
     preferred_model_text: form.get('preferred_model_text'),
     acceptable_models_text: form.get('acceptable_models_text'),
     // The browser converts datetime-local to an absolute instant. Fail validation
     // instead of silently dropping a selected deadline when that conversion is absent.
-    deadline: deadline || (localDeadline ? 'invalid-local-deadline' : null),
-    required_tools: form.getAll('required_tools')
+    deadline: deadline || (localDeadline ? 'invalid-local-deadline' : null)
   });
   if (!parsed.success) return parsed;
   return { ...parsed, input: parsed.data };

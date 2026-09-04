@@ -23,6 +23,7 @@ import {
   totalFileSize,
   validExternalUrl,
   validFile,
+  validJobAttachmentZip,
   validProfilePhoto,
   jobSchema,
   submissionSchema
@@ -53,12 +54,13 @@ describe('handoff exports', () => {
   const job = { prompt: 'Continue analysis and return a checked answer.' };
   it('generates bounded runnable prompt', () => {
     const p = runnablePrompt(
-      job,
+      { ...job, helper_instructions: 'Unzip materials.zip before starting.' },
       [{ label: 'Link to chat', url: 'https://chat.example/share/one' }],
       [{ original_filename: 'paper.pdf', description: 'read it' }]
     );
     expect(p).toContain('Study the full chat history');
     expect(p).toContain('PROMPT\nContinue analysis');
+    expect(p).toContain('INSTRUCTIONS FOR THE HELPER\nUnzip materials.zip before starting.');
     expect(p).toContain('paper.pdf: read it');
   });
   it('keeps legacy and follow-up context separate from the new prompt', () => {
@@ -110,6 +112,9 @@ describe('validation', () => {
     expect(validProfilePhoto('portrait.webp', 'image/webp', 12)).toBe(true);
     expect(validProfilePhoto('paper.pdf', 'application/pdf', 12)).toBe(false);
     expect(validProfilePhoto('portrait.png', 'image/png', 6 * 1024 * 1024)).toBe(false);
+    expect(validJobAttachmentZip('materials.zip', 'application/zip', 12)).toBe(true);
+    expect(validJobAttachmentZip('materials.pdf', 'application/pdf', 12)).toBe(false);
+    expect(validJobAttachmentZip('materials.zip', 'application/zip', 25 * 1024 * 1024 + 1)).toBe(false);
     expect(Object.keys(allowedFiles)).not.toContain('html');
   });
   it('caps aggregate sizes', () => expect(totalFileSize([{ size_bytes: 2 }, { size_bytes: 3 }])).toBe(5));
@@ -119,10 +124,10 @@ describe('validation', () => {
       title: 'Task',
       task_summary: 'Summary',
       prompt: 'Continue',
-      chat_url: '',
+      helper_instructions: '',
+      chat_url: 'https://chat.example/share/one',
       preferred_model_text: 'GPT-6 Astra',
-      acceptable_models_text: 'Any frontier model',
-      required_tools: []
+      acceptable_models_text: 'Any frontier model'
     };
     expect(jobSchema.safeParse({ ...base, deadline: '2099-09-30T17:00:00' }).success).toBe(false);
     expect(jobSchema.safeParse({ ...base, deadline: '2099-09-30T17:00:00-04:00' }).success).toBe(true);
@@ -135,14 +140,23 @@ describe('validation', () => {
       title: '',
       task_summary: '',
       prompt: '',
+      helper_instructions: '',
       chat_url: '',
       preferred_model_text: '',
       acceptable_models_text: '',
-      required_tools: [],
       deadline: null
     };
     expect(jobDraftSchema.safeParse(empty).success).toBe(true);
     expect(jobPublishSchema.safeParse(empty).success).toBe(false);
+    expect(
+      jobPublishSchema.safeParse({
+        ...empty,
+        title: 'Task',
+        task_summary: 'Summary',
+        prompt: 'Prompt',
+        preferred_model_text: 'GPT-6 Astra'
+      }).success
+    ).toBe(false);
     expect(jobDraftSchema.safeParse({ ...empty, prompt: 'p'.repeat(100000) }).success).toBe(true);
     expect(jobDraftSchema.safeParse({ ...empty, prompt: 'p'.repeat(100001) }).success).toBe(false);
   });
@@ -452,6 +466,13 @@ describe('UI feedback contracts', () => {
     expect(newJob).toContain('name="task_summary"');
     expect(newJob).toContain('name="prompt"');
     expect(newJob).toContain('name="chat_url"');
+    expect(newJob).not.toContain('Link to chat (optional)');
+    expect(newJob).toContain('name="helper_instructions"');
+    expect(newJob).toContain('name="job_attachment"');
+    expect(newJob).toContain('accept=".zip,application/zip,application/x-zip-compressed"');
+    expect(newJob).toContain('placeholder="The name of this task"');
+    expect(newJob).toContain('placeholder="A brief description of what this task is about"');
+    expect(newJob).toContain('placeholder="The complete instruction set for the helper to give their model"');
     expect(newJob).toContain('name="preferred_model_text"');
     expect(newJob).toContain('placeholder="GPT-6 Astra"');
     expect(newJob).toContain('name="acceptable_models_text"');
@@ -462,6 +483,7 @@ describe('UI feedback contracts', () => {
     expect(newJob).not.toContain('name="effort"');
     expect(newJob).not.toContain('name="acknowledged"');
     expect(newJob).not.toContain('name="output_format"');
+    expect(newJob).not.toContain('name="required_tools"');
     expect(newJob).toContain('maxlength="100000"');
     expect(detail).toContain('form="draft-editor" name="intent" value="publish"');
     expect(detailActions).toContain("intent.data === 'publish' ? 'update_and_publish_job' : 'update_draft_job'");
@@ -472,7 +494,7 @@ describe('UI feedback contracts', () => {
     const detailActions = readFileSync(new URL('../routes/app/jobs/[id]/+page.server.ts', import.meta.url), 'utf8');
     expect(detail).toContain("w.permissions.edit_submission ? '?/edit_submission' : '?/submit'");
     expect(detail).toContain('<legend>Reasoning effort</legend>');
-    expect(detail).toContain('<h2>Attach relevant files</h2>');
+    expect(detail).toContain('<h2>Required attachments</h2>');
     expect(detail).toContain('<h2>Attach result files</h2>');
     expect(detail).toContain('<table class="file-table">');
     expect(detail).toContain('bind:value={draftPrompt}');
@@ -481,6 +503,7 @@ describe('UI feedback contracts', () => {
     expect(detail).toContain('{#if w.permissions.copy_prompt}');
     expect(detail).not.toContain('name="tools_used"');
     expect(detail).not.toContain('Sealed task');
+    expect(detail).toContain("w.permissions.cancel && w.job.status !== 'cancelled'");
     expect(detailActions).toContain('edit_submission: async');
     expect(detailActions).toContain("locals.supabase.rpc('edit_submitted_result'");
     expect(REASONING_EFFORTS).toEqual(['low', 'medium', 'high', 'extra_high', 'max', 'ultra', 'other']);

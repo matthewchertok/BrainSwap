@@ -19,7 +19,7 @@ enabled = true
 [storage.buckets.job-files]
 public = false
 file_size_limit = "25MiB"
-allowed_mime_types = ["application/pdf","text/plain","text/markdown","text/csv","application/json","image/png","image/jpeg","image/webp","application/vnd.openxmlformats-officedocument.wordprocessingml.document","application/vnd.openxmlformats-officedocument.presentationml.presentation","application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"]
+allowed_mime_types = ["application/pdf","text/plain","text/markdown","text/csv","application/json","image/png","image/jpeg","image/webp","application/vnd.openxmlformats-officedocument.wordprocessingml.document","application/vnd.openxmlformats-officedocument.presentationml.presentation","application/vnd.openxmlformats-officedocument.spreadsheetml.sheet","application/zip","application/x-zip-compressed"]
 
 [storage.buckets.profile-photos]
 public = false

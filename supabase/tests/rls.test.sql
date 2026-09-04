@@ -2,7 +2,7 @@ begin;
 
 -- Updated after all assertions are written. Keeping an explicit plan makes CI
 -- fail if a future edit silently drops an adversarial case.
-select plan(266);
+select plan(272);
 
 -- Fixed identities make failures reproducible. Everything is rolled back.
 insert into auth.users(
@@ -142,11 +142,11 @@ as $$
   select jsonb_build_object(
     'title','Valid draft', 'task_summary','Safe listing summary',
     'prompt','Perform the exact next task',
+    'helper_instructions','Unzip the required attachment before starting.',
     'chat_url','https://example.test/shared-chat',
     'preferred_model_text','GPT-6 Astra',
     'acceptable_models_text','Any frontier model',
-    'deadline',to_char(now() + interval '1 day','YYYY-MM-DD"T"HH24:MI:SS"Z"'),
-    'required_tools',jsonb_build_array('Code execution')
+    'deadline',to_char(now() + interval '1 day','YYYY-MM-DD"T"HH24:MI:SS"Z"')
   )
 $$;
 
@@ -381,9 +381,20 @@ reset role;
 -- Server-authoritative draft validation and publication.
 set local role authenticated;
 set local "request.jwt.claim.sub" = '10000000-0000-0000-0000-000000000002';
-select throws_ok(
-  $$select public.create_draft_job('aaaaaaaa-0000-0000-0000-000000000001',pg_temp.valid_draft_input() || '{"required_tools":["Shell"]}'::jsonb)$$,
-  'invalid required tools', 'direct RPC rejects tools outside the supported catalog'
+select lives_ok(
+  $$select set_config(
+    'brainswap_test.no_tools_job',
+    public.create_draft_job(
+      'aaaaaaaa-0000-0000-0000-000000000001',
+      pg_temp.valid_draft_input() || '{"required_tools":["Browser-supplied value"]}'::jsonb
+    )::text,
+    false
+  )$$,
+  'retired browser-supplied required tools cannot influence draft creation'
+);
+select is(
+  (select required_tools from public.jobs where id=current_setting('brainswap_test.no_tools_job')::uuid),
+  '{}'::text[], 'new drafts always store an empty retired required-tools field'
 );
 select throws_ok(
   $$select public.create_draft_job('aaaaaaaa-0000-0000-0000-000000000001',pg_temp.valid_draft_input() - 'prompt')$$,
@@ -426,7 +437,7 @@ select lives_ok(
     'brainswap_test.partial_job',
     public.create_draft_job(
       'aaaaaaaa-0000-0000-0000-000000000001',
-      '{"title":"","task_summary":"","prompt":"","chat_url":"","preferred_model_text":"","acceptable_models_text":"","deadline":null,"required_tools":[]}'::jsonb
+      '{"title":"","task_summary":"","prompt":"","helper_instructions":"","chat_url":"","preferred_model_text":"","acceptable_models_text":"","deadline":null}'::jsonb
     )::text,
     false
   )$$,
@@ -501,6 +512,13 @@ select is(
   (select title from public.jobs where id='c0000000-0000-0000-0000-000000000001'),
   'Valid draft', 'failed atomic publication rolls its draft edits back'
 );
+select throws_ok(
+  $$select public.update_and_publish_job(
+    'c0000000-0000-0000-0000-000000000001',
+    jsonb_set(pg_temp.valid_draft_input(),'{chat_url}',to_jsonb(''::text))
+  )$$,
+  'job is incomplete', 'publication requires exactly one protected shared-chat link'
+);
 select lives_ok(
   $$select public.update_and_publish_job(
     'c0000000-0000-0000-0000-000000000001',
@@ -513,7 +531,8 @@ select is(
   'Published editor title', 'atomic publication persists the visible editor values'
 );
 select is((select status from public.jobs where id='c0000000-0000-0000-0000-000000000001'),'open'::public.job_status,'publication performs draft to open transition');
-select is((select required_tools from public.jobs where id='c0000000-0000-0000-0000-000000000001'),array['Code execution']::text[],'publication preserves validated required tools');
+select is((select required_tools from public.jobs where id='c0000000-0000-0000-0000-000000000001'),'{}'::text[],'publication keeps the retired required-tools field empty');
+select is((select helper_instructions from public.job_payloads where job_id='c0000000-0000-0000-0000-000000000001'),'Unzip the required attachment before starting.','helper instructions are stored with the protected payload');
 select is(public.job_workspace('c0000000-0000-0000-0000-000000000001')->'payload'->>'task_summary',
   'Safe listing summary', 'new jobs fall back to the listing task summary without duplicating prompt text');
 select is(public.job_workspace('c0000000-0000-0000-0000-000000000001')->'payload'->>'legacy_current_task',
@@ -1044,11 +1063,35 @@ select throws_ok(
 );
 select throws_ok(
   $$select * from public.reserve_job_file('c0000000-0000-0000-0000-000000000014','extra.txt','text/plain',1,null)$$,
-  'job file limit exceeded', '100 MiB job limit counts pending reservations'
+  'file not allowed', 'non-ZIP files cannot be added as new job attachments'
 );
-select ok((select position('report.txt' in r.storage_path)=0
-  from public.reserve_job_file('c0000000-0000-0000-0000-000000000011','report.txt','text/plain',4,null) r),
-  'reserved path is randomized and contains no raw filename');
+select throws_ok(
+  $$select * from public.reserve_job_file('c0000000-0000-0000-0000-000000000011','report.txt','text/plain',4,null)$$,
+  'file not allowed', 'new job attachments must use the ZIP-only workflow'
+);
+select lives_ok(
+  $$select set_config('brainswap_test.zip_path',r.storage_path,false)
+    from public.reserve_job_file(
+      current_setting('brainswap_test.partial_job')::uuid,
+      'required-materials.zip','application/zip',4,null
+    ) r$$,
+  'requester can reserve one ZIP attachment for a draft'
+);
+select ok(
+  position('required-materials.zip' in current_setting('brainswap_test.zip_path'))=0
+    and private.can_storage_upload(
+      current_setting('brainswap_test.zip_path'),
+      '{"contentLength":4,"mimetype":"application/zip"}'::jsonb
+    ),
+  'ZIP path is randomized and exact raw-binary upload metadata matches its reservation'
+);
+select throws_ok(
+  $$select * from public.reserve_job_file(
+    current_setting('brainswap_test.partial_job')::uuid,
+    'second.zip','application/zip',4,null
+  )$$,
+  'file not allowed', 'a draft can reserve only one required-attachment ZIP'
+);
 select lives_ok($$select public.finalize_job_file('f0000000-0000-0000-0000-000000000003')$$,'matching Storage object finalizes exact reservation');
 select ok(not private.can_storage_upload('aaaaaaaa-0000-0000-0000-000000000001/c0000000-0000-0000-0000-000000000011/job/33333333-3333-3333-3333-333333333333','{"size":4,"mimetype":"text/plain"}'::jsonb),'ready object cannot be overwritten through upload policy');
 select lives_ok(

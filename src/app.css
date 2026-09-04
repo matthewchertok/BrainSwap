@@ -344,6 +344,11 @@ select {
 textarea {
   resize: vertical;
 }
+input::placeholder,
+textarea::placeholder {
+  color: #6b7280;
+  opacity: 1;
+}
 .checks label,
 .ack,
 fieldset > label:has(input[type='checkbox']),
