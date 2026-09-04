@@ -427,6 +427,19 @@ describe('UI feedback contracts', () => {
     expect(styles).not.toContain('--green:');
   });
 
+  it('offers verified access requests after an unauthorized Google sign-in', () => {
+    const page = readFileSync(new URL('../routes/unauthorized/+page.svelte', import.meta.url), 'utf8');
+    const server = readFileSync(new URL('../routes/unauthorized/+page.server.ts', import.meta.url), 'utf8');
+    expect(page).toContain('Your Google account is not yet on the approved users list.');
+    expect(page).toContain('<form method="POST" action="?/requestAccess">');
+    expect(page).toContain('Access requested. An administrator will review your request');
+    expect(page).toContain('<button class="secondary">Return to sign in</button>');
+    expect(page).not.toContain('Clear sign-in session');
+    expect(server).toContain('verifiedPrimaryGoogleEmail(data.user)');
+    expect(server).toContain('sendAccessRequestEmail(requesterEmail)');
+    expect(server).toContain("redirect(303, '/unauthorized?request=sent')");
+  });
+
   it('persists browser sessions and renews a durable auth cookie', () => {
     const browserClient = readFileSync(new URL('./supabase-browser.ts', import.meta.url), 'utf8');
     const serverHook = readFileSync(new URL('../hooks.server.ts', import.meta.url), 'utf8');
