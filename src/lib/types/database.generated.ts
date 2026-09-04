@@ -482,12 +482,14 @@ export type Database = {
       };
       memberships: {
         Row: {
+          account_deletion_started_at: string | null;
           active: boolean;
           bio: string | null;
           capabilities: string[];
           claimed_at: string | null;
           claimed_user_id: string | null;
           created_at: string;
+          deleted_at: string | null;
           display_name: string | null;
           id: string;
           invited_email: string;
@@ -498,12 +500,14 @@ export type Database = {
           user_id: string | null;
         };
         Insert: {
+          account_deletion_started_at?: string | null;
           active?: boolean;
           bio?: string | null;
           capabilities?: string[];
           claimed_at?: string | null;
           claimed_user_id?: string | null;
           created_at?: string;
+          deleted_at?: string | null;
           display_name?: string | null;
           id?: string;
           invited_email: string;
@@ -514,12 +518,14 @@ export type Database = {
           user_id?: string | null;
         };
         Update: {
+          account_deletion_started_at?: string | null;
           active?: boolean;
           bio?: string | null;
           capabilities?: string[];
           claimed_at?: string | null;
           claimed_user_id?: string | null;
           created_at?: string;
+          deleted_at?: string | null;
           display_name?: string | null;
           id?: string;
           invited_email?: string;
@@ -991,6 +997,13 @@ export type Database = {
         };
         Returns: string;
       };
+      begin_account_deletion: {
+        Args: never;
+        Returns: {
+          bucket_id: string;
+          storage_path: string;
+        }[];
+      };
       begin_job_deletion: {
         Args: { p_job_id: string };
         Returns: {
@@ -1039,6 +1052,7 @@ export type Database = {
         Args: { p_job_id: string };
         Returns: undefined;
       };
+      delete_own_account: { Args: never; Returns: undefined };
       delete_profile_photo_record: {
         Args: { p_photo_id: string };
         Returns: undefined;

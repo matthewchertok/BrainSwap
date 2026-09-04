@@ -28,6 +28,7 @@
     {#if data.accessRequestsEnabled}
       <p class="login-help">Access requests use Google to verify the exact email address you want invited.</p>
     {/if}
+    {#if data.notice}<p class="notice" role="status">{data.notice}</p>{/if}
     {#if data.message}<p class="error" role="alert">{data.message}</p>{/if}
     {#if form?.message}<p class="error" role="alert">{form.message}</p>{/if}
   </section>
