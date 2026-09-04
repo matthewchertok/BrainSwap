@@ -2,6 +2,7 @@ import { env } from '$env/dynamic/private';
 import { z } from 'zod';
 
 const emailSchema = z.string().trim().toLowerCase().max(254).email();
+const authUserIdSchema = z.string().uuid();
 
 const settingsSchema = z.object({
   apiKey: z.string().trim().min(1).max(512),
@@ -44,11 +45,13 @@ export function verifiedPrimaryGoogleEmail(user: AccessRequestAuthUser | null): 
 
 export async function accessRequestIdempotencyKey(
   requesterEmail: string,
+  authUserId: string,
   settings: AccessRequestEmailSettings
 ): Promise<string> {
   const normalizedRequester = emailSchema.parse(requesterEmail);
+  const normalizedAuthUserId = authUserIdSchema.parse(authUserId);
   const normalizedSettings = settingsSchema.parse(settings);
-  const material = `${normalizedRequester}\u0000${normalizedSettings.recipient}\u0000${normalizedSettings.sender}`;
+  const material = `${normalizedRequester}\u0000${normalizedAuthUserId}\u0000${normalizedSettings.recipient}\u0000${normalizedSettings.sender}`;
   const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(material));
   const hash = Array.from(new Uint8Array(digest), (byte) => byte.toString(16).padStart(2, '0')).join('');
   return `brainswap-access/${hash}`;
@@ -56,16 +59,18 @@ export async function accessRequestIdempotencyKey(
 
 export async function deliverAccessRequestEmail(
   requesterEmail: string,
+  authUserId: string,
   unparsedSettings: AccessRequestEmailSettings,
   { fetcher = fetch }: DeliveryOptions = {}
 ): Promise<AccessRequestEmailResult> {
   const settings = settingsSchema.safeParse(unparsedSettings);
   const body = accessRequestEmailBody(requesterEmail);
-  if (!settings.success || !body) return 'failed';
+  const parsedAuthUserId = authUserIdSchema.safeParse(authUserId);
+  if (!settings.success || !body || !parsedAuthUserId.success) return 'failed';
 
   try {
     const normalizedRequester = emailSchema.parse(requesterEmail);
-    const idempotencyKey = await accessRequestIdempotencyKey(normalizedRequester, settings.data);
+    const idempotencyKey = await accessRequestIdempotencyKey(normalizedRequester, parsedAuthUserId.data, settings.data);
     const response = await fetcher('https://api.resend.com/emails', {
       method: 'POST',
       headers: {
@@ -90,9 +95,10 @@ export async function deliverAccessRequestEmail(
 
 export async function sendAccessRequestEmail(
   requesterEmail: string,
+  authUserId: string,
   options: DeliveryOptions = {}
 ): Promise<AccessRequestEmailResult> {
   const settings = accessRequestEmailSettings();
   if (!settings) return 'not_configured';
-  return deliverAccessRequestEmail(requesterEmail, settings, options);
+  return deliverAccessRequestEmail(requesterEmail, authUserId, settings, options);
 }
