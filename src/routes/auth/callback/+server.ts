@@ -29,7 +29,9 @@ export const GET = async ({ url, locals }) => {
     }
   }
 
-  await endSession(locals);
-  if (url.searchParams.get('intent') === 'request_access') redirect(303, `/unauthorized?request=${requestStatus}`);
+  if (url.searchParams.get('intent') === 'request_access') {
+    await endSession(locals);
+    redirect(303, `/unauthorized?request=${requestStatus}`);
+  }
   redirect(303, '/unauthorized');
 };
